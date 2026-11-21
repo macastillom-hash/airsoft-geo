@@ -249,14 +249,14 @@ FOR EACH ROW EXECUTE FUNCTION public.f3_complete_elimination();
 
 -- La bandera vuelve automáticamente a su base si el portador se retira.
 CREATE OR REPLACE FUNCTION public.f3_release_flag_on_leave()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $airsoft$
 BEGIN
  IF NEW.status='withdrawn' AND OLD.status<>'withdrawn' THEN
   UPDATE public.activity_flags SET status='base',carrier_id=NULL,updated_at=now()
   WHERE activity_id=NEW.activity_id AND carrier_id=NEW.user_id;
  END IF;
  RETURN NEW;
-END $;
+END $airsoft$;
 DROP TRIGGER IF EXISTS trg_f3_release_flag_on_leave ON public.activity_participants;
 CREATE TRIGGER trg_f3_release_flag_on_leave AFTER UPDATE OF status ON public.activity_participants
  FOR EACH ROW EXECUTE FUNCTION public.f3_release_flag_on_leave();
