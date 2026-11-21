@@ -145,6 +145,16 @@ BEGIN
    (SELECT count(*) FROM public.activity_teams t WHERE t.activity_id=NEW.id)<>2 THEN
    RAISE EXCEPTION 'Esta modalidad requiere dos equipos';
   END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.activity_participants ap WHERE ap.activity_id=NEW.id AND ap.status='active') THEN
+   RAISE EXCEPTION 'Primero debe inscribirse al menos un participante';
+  END IF;
+  IF NEW.mode IN ('direct_elimination','capture_flag') AND EXISTS (
+    SELECT 1 FROM public.activity_teams t WHERE t.activity_id=NEW.id
+      AND NOT EXISTS (SELECT 1 FROM public.activity_participants ap
+        WHERE ap.activity_id=NEW.id AND ap.team_id=t.team_id AND ap.status='active')
+  ) THEN
+   RAISE EXCEPTION 'Cada equipo debe tener al menos un participante activo';
+  END IF;
   IF NEW.mode='capture_flag' AND
    (SELECT count(*) FROM public.activity_zones z WHERE z.activity_id=NEW.id AND z.zone_type='base')<>2 THEN
    RAISE EXCEPTION 'Define las dos bases GPS antes de iniciar';
@@ -211,6 +221,7 @@ BEGIN
   END IF;
   IF OLD.status<>'pending' OR NEW.status NOT IN ('confirmed','rejected') THEN RAISE EXCEPTION 'Captura ya resuelta'; END IF;
   IF NOT EXISTS(SELECT 1 FROM public.activities WHERE id=OLD.activity_id AND status='active') THEN RAISE EXCEPTION 'La actividad ya no está activa'; END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.activity_participants ap WHERE ap.activity_id=OLD.activity_id AND ap.user_id=OLD.target_id AND ap.status='active') THEN RAISE EXCEPTION 'El participante ya no está activo'; END IF;
   NEW.resolved_at:=now();
  END IF;
  RETURN NEW;
@@ -235,6 +246,20 @@ END $$;
 DROP TRIGGER IF EXISTS trg_f3_complete_elimination ON public.activity_eliminations;
 CREATE TRIGGER trg_f3_complete_elimination AFTER UPDATE OF status ON public.activity_eliminations
 FOR EACH ROW EXECUTE FUNCTION public.f3_complete_elimination();
+
+-- La bandera vuelve automáticamente a su base si el portador se retira.
+CREATE OR REPLACE FUNCTION public.f3_release_flag_on_leave()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+BEGIN
+ IF NEW.status='withdrawn' AND OLD.status<>'withdrawn' THEN
+  UPDATE public.activity_flags SET status='base',carrier_id=NULL,updated_at=now()
+  WHERE activity_id=NEW.activity_id AND carrier_id=NEW.user_id;
+ END IF;
+ RETURN NEW;
+END $;
+DROP TRIGGER IF EXISTS trg_f3_release_flag_on_leave ON public.activity_participants;
+CREATE TRIGGER trg_f3_release_flag_on_leave AFTER UPDATE OF status ON public.activity_participants
+ FOR EACH ROW EXECUTE FUNCTION public.f3_release_flag_on_leave();
 
 -- Acciones de bandera atómicas: GPS reciente y zona autorizada.
 -- No se valida antisuplantación: las coordenadas del dispositivo pueden falsificarse.
@@ -441,7 +466,7 @@ GRANT EXECUTE ON FUNCTION public.f3_activity_visible(uuid),public.f3_enrolled(uu
  public.f3_flag_action(uuid,uuid,text), public.f3_join_activity_team(text,uuid), public.f3_create_activity(uuid,text,text,text,timestamptz,integer,integer),
  public.f3_organizer_action(uuid,text,uuid),public.f3_respawn(uuid) TO authenticated;
 REVOKE EXECUTE ON FUNCTION public.f3_validate_activity_update(),public.f3_activity_status_event(),
- public.f3_flag_on_team_join(),public.f3_validate_elimination(),public.f3_complete_elimination() FROM PUBLIC,anon,authenticated;
+ public.f3_flag_on_team_join(),public.f3_validate_elimination(),public.f3_complete_elimination(),public.f3_release_flag_on_leave() FROM PUBLIC,anon,authenticated;
 
 -- Realtime mantiene sincronizadas las actividades sin recargar páginas.
 DO $$ DECLARE t text; BEGIN
