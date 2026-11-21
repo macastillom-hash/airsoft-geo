@@ -40,7 +40,7 @@ node "$REPO_DIR/scripts/verify-backup.mjs" "$WORK_DIR" >/dev/null
 tar -C "$WORK_DIR" -czf "$TAR_FILE" .
 echo "Cifrando copia con age..."
 age -r "$BACKUP_AGE_RECIPIENT" -o "$TARGET" "$TAR_FILE"
-sha256sum "$TARGET" > "$TARGET.sha256"
+(cd "$(dirname "$TARGET")" && sha256sum "$(basename "$TARGET")" > "$(basename "$TARGET").sha256")
 test -s "$TARGET"
 echo "Respaldo cifrado y verificable preparado."
 echo "Archivo: $(basename "$TARGET")"
