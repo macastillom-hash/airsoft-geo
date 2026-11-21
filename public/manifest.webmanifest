@@ -1,0 +1,12 @@
+{
+  "id":"/",
+  "name":"Airsoft Geo - Coordinación GPS",
+  "short_name":"Airsoft Geo",
+  "description":"Plataforma de comunicación, equipos y GPS con permisos de ubicación",
+  "start_url":"/",
+  "scope":"/",
+  "display":"standalone",
+  "background_color":"#f4f7fb",
+  "theme_color":"#0d2030",
+  "icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"}, {"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]
+}

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {defaults,loadNotificationSettings,saveNotificationSettings,vibratePattern,patterns} from '../src/notificationUtils.js';
+const mem=new Map();
+globalThis.localStorage={getItem:key=>mem.get(key)??null,setItem:(key,val)=>mem.set(key,val)};
+Object.defineProperty(globalThis,'navigator',{configurable:true,value:{vibrate:pattern=>{assert.deepEqual(pattern,patterns.direct_message);return true;}}});
+assert.deepEqual(loadNotificationSettings('usr-1'),defaults);
+saveNotificationSettings('usr-1',{...defaults,sound:true});
+assert.equal(loadNotificationSettings('usr-1').sound,true);
+assert.equal(loadNotificationSettings('usr-2').sound,false);
+assert.equal(vibratePattern('direct_message'),true);
+assert.equal(patterns.team_alert.length,5);
+console.log('OK: preferences per user and vibration patterns');
