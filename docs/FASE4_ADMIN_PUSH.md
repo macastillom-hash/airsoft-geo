@@ -44,3 +44,15 @@ Por privacidad, el contenido enviado como push es el título y un detalle genér
 6. Desactivar push y verificar que el dispositivo deja de recibir pruebas.
 7. En iOS PWA instalada en inicio, comprobar permiso y notificación; el resultado puede variar.
 8. Revisar Supabase Advisors, logs de Edge Functions y Render.
+
+## Copia PostgreSQL en Windows (manual o programable)
+Se añadió `scripts/backup_postgres.ps1`. Genera un backup PostgreSQL personalizado, SHA256 y manifiesto de integridad. Los archivos se guardan localmente, fuera del repositorio, y pueden conservarse las 14 copias más recientes.
+
+Requisitos: instalar herramientas oficiales de PostgreSQL 17 (`pg_dump`) y disponer de una URI de conexión válida de Supabase. Ejecutar:
+
+```powershell
+$env:SUPABASE_DB_URL = Read-Host 'URI privada de PostgreSQL'
+.\scripts\backup_postgres.ps1 -OutputDir 'D:\RespaldosAirsoft' -KeepLast 14
+```
+
+El comando **no es un respaldo automático hasta que el usuario configure una tarea programada y una forma segura de recuperar credenciales** bajo la cuenta del sistema. La URI jamás debe guardarse en GitHub. Se requiere exportación independiente de los objetos de los buckets privados y una prueba de restauración antes de confiar en el procedimiento de recuperación.
