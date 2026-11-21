@@ -7,7 +7,7 @@ const errorText=e=>e?.message||'No fue posible consultar la información.';
 const stamp=value=>value?new Date(value).toLocaleString('es-CO'):'—';
 const modes={coordination:'Coordinación',stealth:'Sigilo',intelligence:'Inteligencia',direct_elimination:'Eliminación virtual',capture_flag:'Captura de bandera'};
 const statuses={draft:'Borrador',scheduled:'Programada',active:'En curso',finished:'Finalizada',cancelled:'Cancelada'};
-const csvValue=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+const csvValue=v=>{const text=String(v??'');const safe=/^[\s\x00-\x1f]*[=+@\-]/.test(text)?"'"+text:text;return '"'+safe.replaceAll('"','""')+'"';};
 function csv(rows,cols){return '\ufeff'+[cols.map(c=>csvValue(c[1])).join(','),...rows.map(row=>cols.map(c=>csvValue(row[c[0]])).join(','))].join('\r\n');}
 function saveFile(filename,mime,data){
  const blob=new Blob([data],{type:mime}),url=URL.createObjectURL(blob),a=document.createElement('a');
