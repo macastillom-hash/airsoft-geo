@@ -22,5 +22,7 @@ jobs:
         run: npm run test:phase2
       - name: Check V3 activity integration
         run: node tests/fase3-sanity.mjs
+      - name: Check V4 administration and push
+        run: npm run test:phase4
       - name: Build production bundle
         run: npm run build

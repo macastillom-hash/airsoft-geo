@@ -1,4 +1,5 @@
 import React from 'react';
+import PushSettings from './PushSettings';
 import {Bell,CheckCheck,Volume2,Smartphone} from 'lucide-react';
 
 export function NotificationCenter({items,loading,onRead,onReadAll,onRefresh}){
@@ -12,7 +13,7 @@ export function NotificationCenter({items,loading,onRead,onReadAll,onRefresh}){
  </div>
 }
 
-export function NotificationSettings({settings,onChange,onTest,notify}){
+export function NotificationSettings({settings,onChange,onTest,notify,userId}){
  const vibrationSupported=typeof navigator!=='undefined'&&typeof navigator.vibrate==='function';
  const browserSupported=typeof Notification!=='undefined';
  const permission=browserSupported?Notification.permission:'unsupported';
@@ -28,6 +29,7 @@ export function NotificationSettings({settings,onChange,onTest,notify}){
   <label className="switchline"><input type="checkbox" checked={settings.system} onChange={e=>onChange({...settings,system:e.target.checked})}/> Mostrar notificación de sistema si la pestaña está en segundo plano</label>
   <p className="small muted">Vibración por API: {vibrationSupported?'Disponible en este navegador (depende del sistema operativo)':'No disponible en este navegador'}. Permiso de notificaciones: {permission}.</p>
   <div className="inline-actions"><button type="button" className="btn outline" onClick={()=>onTest('direct_message')}><Smartphone size={16}/> Probar vibración</button><button type="button" className="btn outline" onClick={()=>onTest('team_message')}><Volume2 size={16}/> Probar aviso</button><button type="button" className="btn primary" onClick={enableSystem} disabled={!browserSupported||permission==='granted'}>Permitir notificaciones</button></div>
-  <p className="small muted">Esta versión detecta mensajes mientras la web está abierta y conectada. Para recibir avisos con la aplicación totalmente cerrada se necesita Web Push con suscripciones y un servicio de envío.</p>
+  <p className="small muted">Las alertas de la V2 siguen funcionando mientras la web está abierta. La suscripción V4 permite entrega en segundo plano cuando el navegador lo admite.</p>
+  <PushSettings userId={userId} notify={notify}/>
  </div>
 }
