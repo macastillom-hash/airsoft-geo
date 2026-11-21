@@ -2,12 +2,14 @@
  * Verificación sin acceso a internet de la copia PostgreSQL + Storage.
  * No restaura ni escribe datos de producción.
  */
-import {readFile,stat} from 'node:fs/promises';
+import {readFile,stat,open} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 const root=path.resolve(process.argv[2]||'');
 if(!process.argv[2])throw Error('Uso: node scripts/verify-backup.mjs <directorio-extraído>');
 const sha=buffer=>createHash('sha256').update(buffer).digest('hex');
+async function shaFile(filename){const h=createHash('sha256');for await(const block of createReadStream(filename))h.update(block);return h.digest('hex');}
 const mustSha=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const raw=await readFile(path.join(root,'storage-manifest.json'),'utf8');
 const manifest=JSON.parse(raw);
@@ -32,9 +34,12 @@ if(nbytes!==manifest.total_bytes)throw Error('Total de bytes inconsistente');
 const database=path.join(root,'postgres.dump');
 const stats=await stat(database);
 if(stats.size<5)throw Error('Dump de PostgreSQL vacío');
-const signature=(await readFile(database)).subarray(0,5).toString();
+const handle=await open(database,'r');
+const header=Buffer.alloc(5);
+try{await handle.read(header,0,5,0)}finally{await handle.close()}
+const signature=header.toString();
 if(signature!=='PGDMP')throw Error('El archivo no parece ser un pg_dump custom');
 const result={format:'airsoft-geo-backup-verified-v1',verified_at:new Date().toISOString(),
- database_bytes:stats.size,database_sha256:sha(await readFile(database)),
+ database_bytes:stats.size,database_sha256:await shaFile(database),
  storage_objects:manifest.total_objects,storage_bytes:nbytes};
 console.log(JSON.stringify(result));
