@@ -26,5 +26,7 @@ jobs:
         run: npm run test:phase4
       - name: Verify offline backup integrity handling
         run: node tests/backup-integrity.mjs
+      - name: Test PostgreSQL 17 recovery in isolated container
+        run: bash tests/staging-restore-smoke.sh
       - name: Build production bundle
         run: npm run build
