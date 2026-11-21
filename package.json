@@ -1,13 +1,15 @@
 {
   "name": "airsoft-geo",
-  "version": "2.0.0",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:phase2": "node tests/fase2-sanity.mjs"
+    "test:phase2": "node tests/fase2-sanity.mjs",
+    "test:phase3": "node tests/fase3-sanity.mjs",
+    "test:phase4": "node tests/fase4-sanity.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
