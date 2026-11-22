@@ -36,6 +36,8 @@ jobs:
         run: npm run test:phase53
       - name: Check V5.3.1 satellite 3D and navigation arrows
         run: npm run test:phase531
+      - name: Check V5.4 guided turn-by-turn navigation
+        run: npm run test:phase54
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke
