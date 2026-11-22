@@ -89,6 +89,19 @@ try{
    'Sesion restaurada NO muestra mapa. Body='+body.slice(0,700)+' JS_ERRORS='+errors.join('\n').slice(0,2600));
   assert.equal(serious.length,0,'JS errors on map: '+serious.join('\n'));
   console.log('PASS: logged-in mobile map rendered. Buttons and navigation present.');
+  // V5.3: change maps without leaving the application or crashing the dashboard.
+  await page.getByRole('button',{name:'Ver mapa 3D'}).click();
+  await page.waitForTimeout(1700);
+  assert.ok((await page.locator('body').innerText()).includes('Compartir GPS'),
+   'Changing to 3D must not blank the mobile dashboard.');
+  await page.getByRole('button',{name:'Ver calles'}).click();
+  await page.locator('.leaflet-container').waitFor({timeout:8000});
+  assert.ok((await page.locator('body').innerText()).includes('Mapa GPS'),
+   'Returning to 2D must keep the GPS interface visible.');
+  assert.equal(errors.filter(e=>/ReferenceError|SyntaxError|rendered more hooks/.test(e)).length,0,
+   '3D switch errors: '+errors.join('\n').slice(0,2000));
+  console.log('PASS: optional 3D switch and 2D fallback keep the mobile UI alive.');
+
   await context.close();
  }
 }finally{
