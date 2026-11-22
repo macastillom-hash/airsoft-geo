@@ -7,6 +7,7 @@ import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
+import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import './unified-map.css';
 
 export const quickSignals=[
@@ -34,10 +35,12 @@ function Pin({position,profile,kind,children}){
  const marker=useMemo(()=>avatarIcon(avatar,profile.alias,kind),[avatar,profile.alias,kind]);
  return <Marker position={position} icon={marker}><Popup minWidth={230} maxWidth={300}>{children}</Popup></Marker>;
 }
-function FollowCurrent({me,focus}){
+function FollowCurrent({me,focus,follow}){
  const map=useMap(),first=useRef(false);
  useEffect(()=>{if(me&&!first.current){map.setView([me.lat,me.lng],16);first.current=true}},[Boolean(me),map]);
- useEffect(()=>{if(me&&focus>0)map.setView([me.lat,me.lng],16)},[focus,map]);
+ useEffect(()=>{if(me&&focus>0)map.flyTo([me.lat,me.lng],Math.max(15,map.getZoom()))},[focus,map]);
+ useEffect(()=>{if(follow&&me&&me.observedAt&&Date.now()-me.observedAt<=30000&&first.current)map.panTo([me.lat,me.lng],{animate:false})},[follow,me?.lat,me?.lng,me?.observedAt,map]);
+ useEffect(()=>{const redraw=()=>setTimeout(()=>map.invalidateSize(),120);document.addEventListener('fullscreenchange',redraw);return()=>document.removeEventListener('fullscreenchange',redraw)},[map]);
  return null;
 }
 function SignalMarker({signal,alias}){
@@ -88,9 +91,14 @@ function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,onTestVibra
  </div>;
 }
 export default function UnifiedMap({user,profile,team,teams,members,me,sharing,busy,onToggleSharing,
- onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify}){
+ onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection}){
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
+ const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
+ const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
+ const shell=useRef(null);
+ const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
+ useEffect(()=>{setDestination(null);setPicking(false)},[team?.id]);
  const liveTeam=!!team,teamId=team?.id;
  useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
@@ -110,6 +118,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  },[teamId,loadSignals]);
  async function sendSignal(kind){
   if(!teamId||sending)return;
+  if(connection?.state==='offline'){notify('SIN CONEXIÓN: no se envió el aviso. Comprueba Internet y vuelve a intentarlo.','error');return;}
   if(['withdrawing','eliminated'].includes(kind)&&!window.confirm('¿Enviar al equipo el aviso "'+signalById[kind].label+'"?'))return;
   setSending(true);
   try{
@@ -176,16 +185,16 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    </MapContainer>
    <div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
     {quickSignals.filter(q=>q.group==='rival').map(q=><QuickButton key={q.id} type={q.id}
-      send={sendSignal} disabled={sending||!liveTeam} compact/>)}
+      send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
     <button className={'v5-quick v5-more-toggle '+(more?'open':'')} type="button"
       onClick={()=>setMore(o=>!o)} aria-expanded={more} title="Más acciones"><MoreHorizontal size={20}/><span>Más</span></button>
    </div>
    <div className="v5-map-rail-bottom" aria-label="Avisos de situación">
     {['need_help','in_position'].map(id=><QuickButton key={id} type={id} send={sendSignal}
-      disabled={sending||!liveTeam} compact/>)}
+      disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>
    {more&&<div className="v5-more-panel">
-    {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam} compact/>)}
+    {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>}
    <button className="v5-recenter" type="button" disabled={!me} onClick={()=>setFocus(v=>v+1)}
     aria-label="Centrar mapa en mi ubicación" title="Centrar en mí"><Navigation size={18}/></button>
