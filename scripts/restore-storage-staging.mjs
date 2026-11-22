@@ -19,7 +19,7 @@ if(process.env.I_CONFIRM_STAGING_RESTORE!=='YES')throw Error('Establece I_CONFIR
 const manifest=JSON.parse(await readFile(path.join(root,'storage-manifest.json'),'utf8'));
 if(manifest.format!=='airsoft-geo-storage-v1'||!Array.isArray(manifest.files))throw Error('Manifiesto inválido');
 const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-for(const bucket of ['team-media','direct-media']){
+for(const bucket of ['team-media','direct-media','profile-avatars']){
  const {data:existing,error:readError}=await client.storage.getBucket(bucket);
  if(readError && !String(readError.message).toLowerCase().includes('not found'))
   throw Error('No se pudo consultar el bucket de prueba');
@@ -30,8 +30,8 @@ for(const bucket of ['team-media','direct-media']){
 }
 let checked=0;
 for(const row of manifest.files){
- if(!['team-media','direct-media'].includes(row.bucket)||!row.key||
- !/^objects\/(team-media|direct-media)\/[a-f0-9]{64}\.bin$/.test(row.local))
+ if(!['team-media','direct-media','profile-avatars'].includes(row.bucket)||!row.key||
+ !/^objects\/(team-media|direct-media|profile-avatars)\/[a-f0-9]{64}\.bin$/.test(row.local))
   throw Error('Objeto de respaldo no válido');
  const rootAbs=path.resolve(root),full=path.resolve(rootAbs,row.local);
  if(!full.startsWith(rootAbs+path.sep))throw Error('Ruta inesperada');
