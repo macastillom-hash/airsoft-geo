@@ -28,7 +28,7 @@ function ActivityMap({me,allies,zones,sharing}){
 }
 export default function Activities({user,teams,me,sharing,positions,alias,notify,onOpenChat,onToggleSharing}){
  const [activities,setActivities]=useState([]),[selectedId,setSelectedId]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
- const [activityTeams,setActivityTeams]=useState([]),[participants,setParticipants]=useState([]),[zones,setZones]=useState([]),[flags,setFlags]=useState([]),[eliminations,setEliminations]=useState([]),[events,setEvents]=useState([]);
+ const [activityTeams,setActivityTeams]=useState([]),[participants,setParticipants]=useState([]),[zones,setZones]=useState([]),[flags,setFlags]=useState([]),[eliminations,setEliminations]=useState([]),[events,setEvents]=useState([]),[roleDefs,setRoleDefs]=useState([]);
  const [showForm,setShowForm]=useState(false),[editId,setEditId]=useState(''),[form,setForm]=useState(blankActivity),[createTeam,setCreateTeam]=useState('');
  const [inviteCode,setInviteCode]=useState(''),[inviteTeam,setInviteTeam]=useState(''),[joinTeam,setJoinTeam]=useState('');
  const [zoneForm,setZoneForm]=useState(blankZone),[zoneEditId,setZoneEditId]=useState(''),[targetId,setTargetId]=useState('');
@@ -44,7 +44,7 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
  const myAllies=participants.filter(p=>p.team_id===myTeamId&&p.user_id!==user.id&&p.status!=='withdrawn');
  const enemies=participants.filter(p=>p.team_id!==myTeamId&&p.status==='active');
  const pending=eliminations.filter(e=>e.target_id===user.id&&e.status==='pending');
- const freshAllies=positions.filter(p=>myAllies.some(a=>a.user_id===p.user_id)&&Date.now()-new Date(p.updated_at).getTime()<45000)
+ const freshAllies=positions.filter(p=>myAllies.some(a=>a.user_id===p.user_id)&&Date.now()-new Date(p.updated_at).getTime()<25000)
    .map(p=>({...p,display_name:myAllies.find(a=>a.user_id===p.user_id)?.display_name||'Compañero'}));
  const sortedTeams=activityTeams.map(at=>({...at,team:teams.find(t=>t.id===at.team_id)}));
  const loadActivities=useCallback(async()=>{
@@ -59,6 +59,8 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
   const names=['activity_teams','activity_participants','activity_zones','activity_flags','activity_eliminations','activity_events'];
   const response=await Promise.all(names.map(n=>supabase.from(n).select('*').eq('activity_id',selectedId).order(n==='activity_events'?'created_at':n==='activity_participants'?'joined_at':'activity_id',{ascending:false}).limit(120)));
   const setters=[setActivityTeams,setParticipants,setZones,setFlags,setEliminations,setEvents];
+   const attachedTeamIds=(response[0].data||[]).map(t=>t.team_id);
+   if(attachedTeamIds.length){const {data:roles,error:roleErr}=await supabase.from('team_roles').select('id,team_id,name').in('team_id',attachedTeamIds);if(!roleErr)setRoleDefs(roles||[]);}else setRoleDefs([]);
   response.forEach(({data,error},i)=>{if(error)notify(`${names[i]}: ${err(error)}`,'error');else setters[i](data||[])});
  },[selectedId,notify]);
  useEffect(()=>{loadActivities()},[loadActivities]);
@@ -128,6 +130,7 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
  async function respondElimination(id,status){await run(async()=>requireOk(await supabase.from('activity_eliminations').update({status}).eq('id',id)),status==='confirmed'?'Captura virtual confirmada':'Solicitud rechazada');}
  async function flagAction(teamId,action){await run(async()=>requireOk(await supabase.rpc('f3_flag_action',{p_activity:activity.id,p_flag_team:teamId,p_action:action})),action==='pickup'?'Bandera recogida virtualmente':'Captura registrada en el marcador');}
  async function organizerAction(action,target){await run(async()=>requireOk(await supabase.rpc('f3_organizer_action',{p_activity:activity.id,p_action:action,p_user:target||null})),action==='reinstate'?'Participante reincorporado':'Banderas reiniciadas');}
+  async function assignActivityRole(member,role){if(!isOrganizer)return;await run(async()=>requireOk(await supabase.rpc('f5_assign_activity_role',{p_activity:activity.id,p_member:member.user_id,p_operational:role||null})),'Rol de actividad actualizado');}
  const visible=!!activity;
  return <div className="act-page stack">
   <div className="section-head"><div><h2>Actividades y coordinación</h2><p className="muted">Sesiones autorizadas, zonas GPS, equipos y registros virtuales. Sin ubicación obligatoria.</p></div><button className="btn outline" onClick={refresh}><RefreshCw size={16}/> Actualizar</button></div>
@@ -148,7 +151,7 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
    </section>
    <section className="tile"><h3><Users size={18}/> Equipos y participantes</h3><div className="act-team-grid">{sortedTeams.map(t=><div className="act-team" key={t.team_id}><div className="act-team-title"><strong>{t.team?.name||'Equipo '+t.side}</strong><span>Equipo {t.side==='alpha'?'A':'B'}</span></div><div className="act-stats"><b>{participants.filter(p=>p.team_id===t.team_id&&p.status==='active').length}</b> activos <b>{t.score}</b> puntos</div>{canConfigure&&<button className="act-small-button" disabled={busy} onClick={()=>removeTeam(t.team_id)}><Trash2 size={14}/> Retirar equipo</button>}</div>)}</div>
     {!myParticipant&&['draft','scheduled','active'].includes(activity.status)?<div className="act-inline"><select value={joinTeam} onChange={e=>setJoinTeam(e.target.value)}><option value="">Mi equipo en esta actividad…</option>{myAssignedTeams.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select><button className="btn primary" disabled={busy||!joinTeam} onClick={enroll}><UserCheck size={16}/> Inscribirme</button></div>:myParticipant?<div className="act-inline"><span>Participas como <strong>{myParticipant.display_name}</strong> · {myParticipant.status}</span>{myParticipant.status!=='withdrawn'&&<button className="btn outline" disabled={busy} onClick={leave}>Abandonar</button>}</div>:null}
-    <div className="act-roster">{participants.map(p=><div key={p.user_id} className="act-person"><span>{p.display_name} {p.user_id===user.id?'(tú)':''}</span><small>{p.status==='active'?'Activo':p.status==='eliminated'?'Eliminado virtualmente':'Retirado'} · {p.team_id===myTeamId?'Aliado':p.team_id===activityTeams.find(t=>t.side==='alpha')?.team_id?'Equipo A':'Equipo B'}</small>{isOrganizer&&isActive&&p.status==='eliminated'&&<button className="act-small-button" onClick={()=>organizerAction('reinstate',p.user_id)} disabled={busy}>Reincorporar</button>}</div>)}</div>
+    <div className="act-roster">{participants.map(p=><div key={p.user_id} className="act-person"><span>{p.display_name} {p.user_id===user.id?'(tú)':''}</span><small>{p.status==='active'?'Activo':p.status==='eliminated'?'Eliminado virtualmente':'Retirado'} · {p.team_id===myTeamId?'Aliado':p.team_id===activityTeams.find(t=>t.side==='alpha')?.team_id?'Equipo A':'Equipo B'}{p.operational_role_id?' · '+(roleDefs.find(r=>r.id===p.operational_role_id)?.name||'Rol'):''}</small>{isOrganizer&&['draft','scheduled','active'].includes(activity.status)&&<select aria-label={'Rol operativo de '+p.display_name} value={p.operational_role_id||''} disabled={busy} onChange={e=>assignActivityRole(p,e.target.value)}><option value="">Sin rol en la actividad</option>{roleDefs.filter(r=>r.team_id===p.team_id).map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select>}{isOrganizer&&isActive&&p.status==='eliminated'&&<button className="act-small-button" onClick={()=>organizerAction('reinstate',p.user_id)} disabled={busy}>Reincorporar</button>}</div>)}</div>
    </section>
    <section className="tile"><div className="section-head"><div><h3><MapPin size={18}/> Mapa y zonas autorizadas</h3><p className="small muted">GPS compartido solo por decisión del usuario; las posiciones de rivales no se muestran.</p></div><button className={'btn '+(sharing?'outline':'primary')} onClick={onToggleSharing}>{sharing?'Detener GPS':'Compartir GPS'}</button></div>
     <div className="act-note"><ShieldCheck size={17}/> Compartir GPS lo hace visible para todos tus compañeros de equipo en Airsoft Geo, no únicamente para esta actividad. Puedes detenerlo en cualquier momento.</div>
