@@ -66,12 +66,19 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  },[]);
  useEffect(()=>{
   const map=mapRef.current;if(!map||!ready)return;
-  const feature=route?.points?.length>1?{
-   type:'Feature',geometry:{type:'LineString',coordinates:route.points.map(p=>[p[1],p[0]])},properties:{}
-  }:null;
+  const routed=route?.points?.length>1;
+  const direct=!routed&&me&&destination&&validCoordinate(me.lat,me.lng)&&validCoordinate(destination.lat,destination.lng);
+  const coordinates=routed?route.points.map(p=>[p[1],p[0]]):
+   direct?[[me.lng,me.lat],[destination.lng,destination.lat]]:[];
+  const feature=coordinates.length>=2?{type:'Feature',
+   geometry:{type:'LineString',coordinates},properties:{}}:null;
   const source=map.getSource('airsoft-v53-route');
   if(source)source.setData({type:'FeatureCollection',features:feature?[feature]:[]});
- },[ready,route]);
+  if(map.getLayer('airsoft-v53-route-line')){
+   map.setPaintProperty('airsoft-v53-route-line','line-color',routed?'#176bc7':'#f09b1a');
+   map.setPaintProperty('airsoft-v53-route-line','line-dasharray',routed?[1,0.1]:[2,2]);
+  }
+ },[ready,route,me?.lat,me?.lng,destination?.lat,destination?.lng]);
  useEffect(()=>{
   if(!ready)return;
   const map=mapRef.current;if(!map)return;
