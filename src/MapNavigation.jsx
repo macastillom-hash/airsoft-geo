@@ -6,6 +6,7 @@ import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {validCoordinate,headingTo,bearingLabel} from './navigationUtils';
+import {routeArrows} from './navigationGuide.js';
 import './map-navigation.css';
 
 const markerIcon=type=>L.divIcon({
@@ -21,6 +22,7 @@ export function NavigationLayers({objectives,destination,onChoose,me,picking,onP
  const destIcon=useMemo(()=>markerIcon('selected'),[]);
  const zoneIcon=useMemo(()=>markerIcon('zone'),[]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
+ const arrows=useMemo(()=>routeArrows(route?.points,85,28),[route?.points]);
  const point=destination&&validCoordinate(destination.lat,destination.lng)?[destination.lat,destination.lng]:null;
  return <>
   <DestinationClick picking={picking} onPick={onPick}/>
@@ -39,7 +41,10 @@ export function NavigationLayers({objectives,destination,onChoose,me,picking,onP
    {fresh&&!route&&<Polyline positions={[[me.lat,me.lng],point]} pathOptions={{
     color:'#e79421',dashArray:'7 8',weight:3,opacity:0.9
    }}/>}
-   {route?.points?.length>1&&<Polyline positions={route.points} pathOptions={{color:'#1b70d8',weight:5,opacity:0.95}}/>}
+   {route?.points?.length>1&&<><Polyline positions={route.points} pathOptions={{color:'#1b70d8',weight:5,opacity:0.95}}/>
+    {arrows.map((arrow,i)=><Marker key={'arr-'+i} interactive={false} position={[arrow.lat,arrow.lng]}
+     icon={L.divIcon({className:'v54-leaflet-route-arrow',html:'<span style="transform:rotate('+(arrow.bearing-90)+'deg)">➤</span>',iconSize:[28,28],iconAnchor:[14,14]})}/>)}
+   </>}
   </>}
  </>;
 }
