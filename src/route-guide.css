@@ -14,3 +14,15 @@
 .v54-3d-wait{position:absolute;left:50%;top:43%;transform:translateX(-50%);z-index:12;color:#1c5269;background:#eaf3f7eb;border-radius:12px;padding:11px 15px;font-size:12px;font-weight:800;box-shadow:0 2px 12px #0002}
 .v53-3d-pin.mine{background:#0e76d5;color:white;border-color:#fff;box-shadow:0 0 0 3px #60adf1,0 2px 10px #0005}
 @media(max-width:600px){.v54-route-hud{top:90px;left:7px;width:min(188px,calc(100% - 135px));gap:6px;padding:8px}.v54-route-arrow-wrap{width:38px;height:38px}.v54-route-arrow-head{font-size:25px}.v54-route-label strong{font-size:10px}.v54-route-label small{font-size:9px}.v54-3d-wait{width:max-content;max-width:67%;text-align:center}}
+
+
+/* V5.4: próxima maniobra y voz opcional sin salir del mapa */
+.v55-route-hud{align-items:flex-start;max-height:45vh;overflow-y:auto;overscroll-behavior:contain;pointer-events:none}
+.v55-route-hud .v54-route-label{gap:5px}
+.v55-next-turn{margin-top:5px;padding:7px;display:flex;gap:6px;align-items:flex-start;background:#ddecfb;border:1px solid #b6d4ef;border-radius:8px;color:#164f85;font-size:11px;line-height:1.4}
+.v55-next-turn svg{flex:none}
+.v55-next-turn b{font-weight:850}
+.v55-voice-toggle{display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid #b8d3e3;border-radius:8px;padding:7px;background:#fff;color:#246183;font-size:11px;font-weight:800;cursor:pointer;pointer-events:auto;max-width:100%}
+.v55-voice-toggle[aria-pressed="true"]{background:#d6f7e9;color:#116a4a;border-color:#92d5b3}
+.v55-voice-toggle:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:600px){.v55-route-hud{max-height:39vh}.v55-next-turn{padding:6px;font-size:10px}.v55-voice-toggle{font-size:10px;padding:6px}}
