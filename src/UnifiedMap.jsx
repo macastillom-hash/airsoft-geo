@@ -9,6 +9,7 @@ import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import {calculateWalkingRoute} from './routeService';
+import {routeGuidance} from './navigationGuide.js';
 import RouteGuideHud from './RouteGuideHud';
 const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
  React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
@@ -107,13 +108,14 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
  const [route,setRoute]=useState(null),[routeStatus,setRouteStatus]=useState('idle'),[routeError,setRouteError]=useState('');
+ const [autoReroute,setAutoReroute]=useState(false),rerouteTracker=useRef({lastFix:0,count:0,lastRequest:0});
  const routeAbort=useRef(null),[selected3DPerson,setSelected3DPerson]=useState(null);
  const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
  const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
  useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
- function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
+ function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setAutoReroute(false);rerouteTracker.current.count=0;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
  useEffect(()=>{chooseDestination(null);setSelected3DPerson(null)},[team?.id]);
  useEffect(()=>()=>routeAbort.current?.abort(),[]);
  async function planRoute(){
@@ -127,15 +129,37 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
   try{
    const result=await calculateWalkingRoute(me,destination,controller.signal);
    if(controller.signal.aborted)return;
-   setRoute(result);setRouteStatus('ready');
+   setRoute(result);setRouteStatus('ready');rerouteTracker.current.count=0;
    notify('Ruta peatonal calculada dentro de Airsoft Geo. Verifica la seguridad y acceso de los caminos.','success');
   }catch(error){
    if(routeAbort.current!==controller)return;
    if(controller.signal.aborted){setRouteError('No se pudo calcular la ruta a tiempo.');}
    else setRouteError('No se pudo obtener un recorrido peatonal de la zona.');
-   setRouteStatus('error');
+   setRouteStatus('error');setAutoReroute(false);
   }finally{clearTimeout(timeout);if(routeAbort.current===controller)routeAbort.current=null}
  }
+ useEffect(()=>{
+  const tracker=rerouteTracker.current;
+  if(!autoReroute||!route?.points?.length||routeStatus!=='ready'||!destination||
+     connection?.state==='offline'||document.visibilityState!=='visible'){
+   tracker.count=0;return;
+  }
+  if(!me||!Number.isFinite(me.observedAt)||Date.now()-me.observedAt>15000||
+     !Number.isFinite(me.accuracy)||me.accuracy>30){tracker.count=0;return;}
+  if(tracker.lastFix===me.observedAt)return;
+  tracker.lastFix=me.observedAt;
+  const guidance=routeGuidance(me,route);
+  if(!guidance?.offRoute||guidance.routeDeviationMeters<75||guidance.arrived){
+   tracker.count=0;return;
+  }
+  tracker.count+=1;
+  if(tracker.count>=3&&Date.now()-tracker.lastRequest>=120000){
+   tracker.count=0;tracker.lastRequest=Date.now();
+   notify('Te alejaste de la ruta: consultando un nuevo recorrido dentro de Airsoft Geo.','info');
+   planRoute();
+  }
+ },[me?.observedAt,autoReroute,route?.calculatedAt,routeStatus,
+  destination?.id,connection?.state]);
  function fallback3D(reason){setMapStyle('street');notify(reason||'Vista 3D no disponible; mapa 2D restaurado.','error')}
 
  const liveTeam=!!team,teamId=team?.id;
@@ -239,7 +263,8 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
-    routeError={routeError} onCalculateRoute={planRoute}
+    routeError={routeError} onCalculateRoute={planRoute} autoReroute={autoReroute}
+    onToggleAutoReroute={setAutoReroute}
     onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
    {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
     <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
