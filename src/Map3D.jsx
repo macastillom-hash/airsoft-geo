@@ -6,20 +6,8 @@ import {routeArrows} from './navigationGuide.js';
 import './map3d.css';
 
 const satelliteTiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const streetTiles='https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const baseStyle={
- version:8,
- sources:{
-  'airsoft-satellite':{type:'raster',tiles:[satelliteTiles],tileSize:256,maxzoom:19,
-   attribution:'Imagery © Esri, Maxar, Earthstar Geographics'},
-  'airsoft-streets':{type:'raster',tiles:[streetTiles],tileSize:256,maxzoom:19,
-   attribution:'© OpenStreetMap contributors'}
- },
- layers:[
-  {id:'airsoft-satellite-layer',type:'raster',source:'airsoft-satellite'},
-  {id:'airsoft-streets-layer',type:'raster',source:'airsoft-streets',layout:{visibility:'none'}}
- ]
-};
+// Base vectorial gratuita, no depende de imágenes satelitales.
+const streetStyle='https://tiles.openfreemap.org/styles/liberty';
 
 export default function Map3D({me,teammates,nearby,objectives,signals,destination,
  route,showTeammates,showNearby,follow,focus,picking,onPick,onChoose,onMember,onUnsupported}){
@@ -28,6 +16,47 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  controls.current={picking,onPick,onChoose,onMember,onUnsupported};
  const [ready,setReady]=useState(false);
  const [mode,setMode]=useState('loading'),[info,setInfo]=useState('');
+ const [satellite,setSatellite]=useState(false),[checkingSatellite,setCheckingSatellite]=useState(false);
+ function toggleSatellite(){
+  const map=mapRef.current;
+  if(!map||!ready||checkingSatellite)return;
+  const layer='airsoft-satellite-layer';
+  if(!map.getLayer(layer)){setInfo('La capa satelital no está preparada. Usa calles 3D.');return;}
+  if(satellite){
+   map.setLayoutProperty(layer,'visibility','none');
+   setSatellite(false);setInfo('');return;
+  }
+  // Una sola prueba previa evita tapar el vectorial con imágenes que no llegan.
+  setCheckingSatellite(true);
+  setInfo('Comprobando imagen satelital…');
+  const center=map.getCenter(),z=Math.max(1,Math.min(16,Math.floor(map.getZoom())));
+  const n=2**z,x=Math.min(n-1,Math.max(0,Math.floor((center.lng+180)/360*n)));
+  const lat=Math.max(-85,Math.min(85,center.lat))*Math.PI/180;
+  const y=Math.min(n-1,Math.max(0,Math.floor((1-Math.asinh(Math.tan(lat))/Math.PI)/2*n)));
+  const img=new Image();
+  let done=false;
+  const finish=ok=>{
+   if(done)return;done=true;clearTimeout(timeout);
+   if(mapRef.current!==map)return;
+   setCheckingSatellite(false);
+   if(ok){
+    try{
+     map.setLayoutProperty(layer,'visibility','visible');
+     setSatellite(true);setInfo('');
+    }catch{
+     setSatellite(false);
+     setInfo('No se pudo mostrar el satélite. Las calles 3D permanecen disponibles.');
+    }
+   }else{
+    setSatellite(false);
+    setInfo('El satélite no está disponible ahora. Puedes reintentar sin perder las calles 3D.');
+   }
+  };
+  const timeout=setTimeout(()=>finish(false),7000);
+  img.onload=()=>finish(true);
+  img.onerror=()=>finish(false);
+  img.src='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x;
+ }
  const [terrainEnabled,setTerrainEnabled]=useState(false);
  function toggleTerrain(){
   const current=mapRef.current;
@@ -59,16 +88,15 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   current.easeTo({pitch:current.getPitch()<30?65:0,duration:450});
  }
  useEffect(()=>{
-  let live=true,map=null,watchdog1=null,watchdog2=null;
+  let live=true,map=null,watchdog=null,styleReady=false;
   const canvas=document.createElement('canvas');
   if(!canvas.getContext('webgl2')){
    controls.current.onUnsupported('No hay aceleración gráfica WebGL 2. Se mantiene el mapa 2D.');
    return;
   }
-  let satelliteReady=false,streetReady=false;
   try{
    map=new maplibregl.Map({
-    container:container.current,style:baseStyle,
+    container:container.current,style:streetStyle,
     center:me&&validCoordinate(me.lat,me.lng)?[me.lng,me.lat]:[-74.1,4.65],
     zoom:me?16:6,pitch:65,bearing:0,maxPitch:80,antialias:true,attributionControl:true
    });
@@ -77,28 +105,18 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    map.on('click',event=>{
     if(controls.current.picking)controls.current.onPick(event.lngLat.lat,event.lngLat.lng);
    });
-   map.on('sourcedata',event=>{
-    if(!live||!event.isSourceLoaded||!['content','idle'].includes(event.sourceDataType))return;
-    if(event.sourceId==='airsoft-satellite'){
-     satelliteReady=true;
-     // La capa de calles está encima de satélite. Una carga tardía
-     // debe recuperar satélite incluso si calles ya respondió.
-     if(map.getLayer('airsoft-satellite-layer')&&map.getLayer('airsoft-streets-layer')){
-      map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');
-      map.setLayoutProperty('airsoft-streets-layer','visibility','none');
-     }
-     setMode('satellite');setInfo('');
-    }else if(event.sourceId==='airsoft-streets'){
-     streetReady=true;
-     // No sobrescribir el estado si satélite ya se recuperó.
-     if(!satelliteReady&&map.getLayer('airsoft-streets-layer')&&
-        map.getLayoutProperty('airsoft-streets-layer','visibility')==='visible')
-      setMode('streets');
-    }
-   });
    map.on('load',()=>{
     if(!live)return;
-    setReady(true);
+    styleReady=true;clearTimeout(watchdog);
+    setReady(true);setMode('streets');
+    try{
+     map.addSource('airsoft-satellite',{type:'raster',tiles:[satelliteTiles],
+      tileSize:256,maxzoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'});
+     map.addLayer({id:'airsoft-satellite-layer',type:'raster',source:'airsoft-satellite',
+      layout:{visibility:'none'}});
+    }catch(error){
+     if(live)setInfo('Calles 3D disponibles. No se pudo preparar la fotografía satelital.');
+    }
     try{
      // La cartografía de edificios es opcional. Una falla vectorial nunca debe
      // dejar en blanco la fotografía satelital.
@@ -122,35 +140,26 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     map.addLayer({id:'airsoft-v53-route-line',type:'line',source:'airsoft-v53-route',
      paint:{'line-color':'#1673ea','line-width':5,'line-opacity':0.95}});
    });
-   // WebGL puede funcionar incluso cuando el servidor cartográfico está caído.
-   // No confundir una pantalla vacía con un celular incompatible.
-   watchdog1=setTimeout(()=>{
-    if(!live||satelliteReady)return;
-    try{
-     if(!map.getLayer('airsoft-streets-layer'))throw Error('La base cartográfica no terminó de inicializarse');
-     // Conservar satélite visible por debajo de calles para que
-     // las teselas que lleguen tarde puedan restaurarse automáticamente.
-     map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');
-     map.setLayoutProperty('airsoft-streets-layer','visibility','visible');
-     setInfo('La imagen satelital tarda en responder. Mostrando calles mientras se sigue intentando.');
-     setMode('fallback');
-     watchdog2=setTimeout(()=>{
-      if(live&&!streetReady&&!satelliteReady)
-       controls.current.onUnsupported('No se pudieron descargar los mapas 3D. Se recuperó el mapa 2D; revisa tu conexión.');
-     },10000);
-    }catch{
-     if(live)controls.current.onUnsupported('La cartografía 3D no pudo iniciarse. Se restauró el mapa 2D.');
-    }
-   },9000);
-   map.on('error',event=>{
-    if(!live)return;
-    const message=String(event?.error?.message||'');
-    if(/server\.arcgisonline\.com|airsoft-satellite|World_Imagery/i.test(message))
-     console.warn('Airsoft Geo 3D: error de imagen satelital:',message);
-    if(/elevation-tiles-prod|airsoft-terrain-dem/i.test(message))
-     console.warn('Airsoft Geo 3D: error de elevación:',message);
-   });
-   map.on('webglcontextlost',()=>{
+   // Si tampoco responde la cartografía vectorial, volver a 2D.
+    watchdog=setTimeout(()=>{
+     if(live&&!styleReady)
+      controls.current.onUnsupported('No se pudieron cargar las calles 3D. Se restauró el mapa 2D.');
+    },14000);
+    map.on('error',event=>{
+     if(!live)return;
+     const message=String(event?.error?.message||'');
+     if(/server\.arcgisonline\.com|airsoft-satellite|World_Imagery/i.test(message)){
+      console.warn('Airsoft Geo 3D: error de satélite:',message);
+      if(map.getLayer('airsoft-satellite-layer')&&
+         map.getLayoutProperty('airsoft-satellite-layer','visibility')==='visible'){
+       map.setLayoutProperty('airsoft-satellite-layer','visibility','none');
+       setSatellite(false);setInfo('Sin fotografía satelital: recuperadas las calles 3D.');
+      }
+     }else if(/elevation-tiles-prod|airsoft-terrain-dem/i.test(message)){
+      console.warn('Airsoft Geo 3D: error de relieve:',message);
+     }
+    });
+    map.on('webglcontextlost',()=>{
     if(live)controls.current.onUnsupported('Se perdió la aceleración gráfica. Se restauró el mapa 2D.');
    });
   }catch(error){
@@ -163,7 +172,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   document.addEventListener('visibilitychange',visibility);
   document.addEventListener('fullscreenchange',resize);
   return()=>{
-   live=false;clearTimeout(watchdog1);clearTimeout(watchdog2);
+   live=false;clearTimeout(watchdog);
    window.removeEventListener('resize',resize);
    document.removeEventListener('visibilitychange',visibility);
    document.removeEventListener('fullscreenchange',resize);
@@ -240,14 +249,17 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    map.flyTo({center:[me.lng,me.lat],zoom:16,pitch:65,duration:500});
  },[focus,ready]);
  return <>
-  <div className="v53-3d-canvas" ref={container} aria-label="Mapa 3D con imagen satelital y orientación"/>
+  <div className="v53-3d-canvas" ref={container} aria-label="Mapa de calles 3D con fotografía satelital opcional"/>
   <div className="v56-3d-tools" role="group" aria-label="Opciones adicionales de vista 3D">
+   <button type="button" onClick={toggleSatellite} disabled={!ready||checkingSatellite}
+    aria-pressed={satellite} title="Fotografía satelital opcional: calles 3D permanece operativa si falla el proveedor">
+    {checkingSatellite?'Comprobando…':satellite?'Calles 3D':'Ver satélite'}</button>
    <button type="button" onClick={togglePitch} disabled={!ready} title="Alternar entre vista aérea y perspectiva inclinada">Inclinar</button>
    <button type="button" onClick={toggleTerrain} disabled={!ready} aria-pressed={terrainEnabled}
     title="Relieve del terreno opcional, con datos abiertos">{terrainEnabled?'Relieve activo':'Relieve'}</button>
   </div>
-  {mode==='loading'&&<div className="v54-3d-wait" aria-live="polite">Cargando imagen satelital…</div>}
+  {mode==='loading'&&<div className="v54-3d-wait" aria-live="polite">Cargando calles 3D…</div>}
   {info&&<div className="v53-3d-info" role="status">{info}</div>}
-  <div className="v53-3d-hint">Perspectiva 3D · Imagen satelital con edificios donde existan datos. Arrastra con dos dedos para inclinar o girar.</div>
+  <div className="v53-3d-hint">V5.8 · Calles 3D independientes del satélite. «Ver satélite» es opcional; gira con dos dedos.</div>
  </>;
 }

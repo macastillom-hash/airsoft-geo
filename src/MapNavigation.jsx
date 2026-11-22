@@ -105,6 +105,9 @@ export default function NavigationControls({me,destination,onDestination,objecti
      title="Mapa de calles" aria-label="Ver calles"><MapIcon size={16}/></button>
     <button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}
      title="Vista satélite" aria-label="Ver satélite"><Satellite size={16}/></button>
+     {destination&&<button type="button" className="v58-camera-shortcut" onClick={onOpenCamera}
+      title="Abrir cámara en vivo para el destino elegido" aria-label="Abrir cámara en vivo">
+      <Camera size={17}/></button>}
    </div>
   </div>
   {expanded&&<>
