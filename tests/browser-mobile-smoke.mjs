@@ -106,7 +106,10 @@ try{
   await page.getByRole('button',{name:'Elegir en mapa'}).click();
   await page.locator('.leaflet-container').click({position:{x:110,y:120}});
   await page.locator('.v52-destination-line').waitFor({timeout:8000});
-  await page.getByRole('button',{name:'Cámara en vivo'}).click();
+  const cameraShortcut=page.getByRole('button',{name:'Abrir cámara en vivo'});
+  assert.ok(await cameraShortcut.isVisible(),
+   'Camera shortcut should be visible in the map header when destination is selected.');
+  await cameraShortcut.click();
   await page.getByRole('dialog',{name:'Orientación con cámara en vivo'}).waitFor({timeout:12000});
   assert.ok((await page.locator('.v56-camera').innerText()).includes('Activar cámara'),
    'La cámara no debe solicitar permiso sin pulsación explícita.');
