@@ -42,6 +42,8 @@ jobs:
         run: npm run test:phase55
       - name: Check V5.6 optional live camera, compass and privacy
         run: npm run test:phase56
+      - name: Check V5.7 free-tier media optimization
+        run: npm run test:phase57
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke
