@@ -2,12 +2,13 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Marker,Popup,Circle,Polyline,useMapEvents} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
-  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle} from 'lucide-react';
+  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle, Play, Square} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {validCoordinate,headingTo,bearingLabel} from './navigationUtils';
 import {routeArrows} from './navigationGuide.js';
 import './map-navigation.css';
+import './turn-navigation.css';
 
 const markerIcon=type=>L.divIcon({
  className:'v52-destination-marker '+type,
@@ -78,7 +79,7 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
- onCalculateRoute,onClearRoute}){
+ onCalculateRoute,onClearRoute,navigationActive,onStartNavigation,onStopNavigation}){
  const [expanded,setExpanded]=useState(false);
  useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
@@ -132,6 +133,11 @@ export default function NavigationControls({me,destination,onDestination,objecti
     {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>
   </div>}
+  {routeReady&&<button type="button" className={'v54-nav-start '+(navigationActive?'end':'')} onClick={()=>{
+   if(navigationActive)onStopNavigation();else{onStartNavigation();setExpanded(false)}
+  }}>
+   {navigationActive?<Square size={16}/>:<Play size={16}/>} {navigationActive?'Detener navegación guiada':'Iniciar navegación guiada'}
+  </button>}
   {routeReady&&<div className="v53-route-summary"><strong>Ruta a pie:</strong> {route.distanceM===null?'—':distanceLabel(route.distanceM)} · {route.durationSeconds===null?'—':Math.max(1,Math.round(route.durationSeconds/60))+' min aproximados'}
     {route.steps.length>0&&<details><summary>Ver indicaciones ({route.steps.length})</summary><ol>{route.steps.map((step,i)=><li key={i}>{step}</li>)}</ol></details>}
    </div>}
