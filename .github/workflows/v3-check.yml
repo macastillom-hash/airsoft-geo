@@ -34,3 +34,9 @@ jobs:
         run: npm run test:phase52
       - name: Build production bundle
         run: npm run build
+      - name: Install browser runtime for mobile smoke
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Run Android Chromium UI smoke (auth and map)
+        run: node tests/browser-mobile-smoke.mjs
