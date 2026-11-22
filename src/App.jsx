@@ -94,13 +94,14 @@ function Dashboard({user,notify}){
   if(gpsUploading.current||(!force&&Date.now()-lastUploadedGps.current<cadence))return;
   gpsUploading.current=true;
   try{
-   const pending=supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,
-     accuracy_m:p.accuracy,updated_at:new Date().toISOString()});
+   const pending=Promise.resolve(supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,
+     accuracy_m:p.accuracy,updated_at:new Date().toISOString()}));
    gpsPending.current=pending;
    const {error}=await pending;
    if(error)notify('No se pudo actualizar GPS: '+sqlError(error),'error');
    else lastUploadedGps.current=Date.now();
-  }finally{gpsUploading.current=false;gpsPending.current=null}
+  }catch(error){notify('GPS no disponible: '+sqlError(error),'error')}
+  finally{gpsUploading.current=false;gpsPending.current=null}
  },[user.id,notify]);
  const startLocation=useCallback(()=>{
   if(!navigator.geolocation){notify('Este navegador no admite geolocalización.','error');return;}
