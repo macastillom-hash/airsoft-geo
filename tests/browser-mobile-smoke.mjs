@@ -102,6 +102,23 @@ try{
    '3D switch errors: '+errors.join('\n').slice(0,2000));
   console.log('PASS: optional 3D switch and 2D fallback keep the mobile UI alive.');
 
+  // V5.4: render the real next-turn HUD on a mobile viewport and verify buttons.
+  await page.goto(host+'/tests/turn-guide-smoke.html',{waitUntil:'domcontentloaded'});
+  await page.getByText('Próxima indicación').waitFor({timeout:10000});
+  await page.getByRole('button',{name:'Activar voz'}).waitFor();
+  assert.ok((await page.locator('body').innerText()).includes('Gira a la derecha'));
+  await page.getByRole('button',{name:'Simular desvío'}).click();
+  await page.getByRole('button',{name:'Recalcular'}).click();
+  await page.getByTestId('reroute-status').getByText('Recalculación solicitada').waitFor();
+  await page.getByRole('button',{name:'Simular desvío'}).click();
+  await page.getByRole('button',{name:'GPS antiguo'}).click();
+  await page.getByText('GPS desactualizado').waitFor();
+  assert.equal(await page.getByRole('button',{name:'Activar voz'}).count(),0,
+   'Stale GPS must suspend turn guidance and voice');
+  const seriousNavErrors=errors.filter(e=>/ReferenceError|TypeError|SyntaxError|rendered more hooks|Cannot access/.test(e));
+  assert.deepEqual(seriousNavErrors,[],'Turn guide browser errors: '+seriousNavErrors.join('\n').slice(0,2000));
+  console.log('PASS: mobile next-turn instructions, explicit voice controls, manual reroute and stale-GPS guard.');
+
   await context.close();
  }
 }finally{
