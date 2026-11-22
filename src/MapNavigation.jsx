@@ -21,7 +21,7 @@ export function NavigationLayers({objectives,destination,onChoose,me,picking,onP
  const destIcon=useMemo(()=>markerIcon('selected'),[]);
  const zoneIcon=useMemo(()=>markerIcon('zone'),[]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
- const point=dest&&validCoordinate(dest.lat,dest.lng)?[dest.lat,dest.lng]:null;
+ const point=destination&&validCoordinate(destination.lat,destination.lng)?[destination.lat,destination.lng]:null;
  return <>
   <DestinationClick picking={picking} onPick={onPick}/>
   {objectives.map(zone=><Marker key={zone.id} position={[zone.lat,zone.lng]} icon={zoneIcon}>
