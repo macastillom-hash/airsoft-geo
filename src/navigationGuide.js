@@ -48,6 +48,8 @@ export function routeGuidance(me,route){
    goal=coords[i+1];lookAhead-=lengths[i];
   }
  }
+ const progressMeters=lengths.slice(0,nearest.index).reduce((sum,x)=>sum+x,0)+
+  lengths[nearest.index]*nearest.t;
  const bearing=headingTo(me,goal);
  const heading=Number.isFinite(me.heading)&&me.heading>=0&&me.heading<=360?me.heading:null;
  const turn=heading===null?null:((bearing-heading+540)%360)-180;
@@ -58,7 +60,9 @@ export function routeGuidance(me,route){
   Math.abs(turn)<=30?'Continúa de frente':turn>0?'Orienta tu marcha a la derecha':'Orienta tu marcha a la izquierda';
  return {bearing,relativeTurn:turn,headingAvailable:heading!==null,direction:bearingLabel(bearing),
   remainingMeters:Math.round(remaining),offRoute,arrived,instruction,
-  routeDeviationMeters:Math.round(nearest.offset),lookahead:goal};
+  routeDeviationMeters:Math.round(nearest.offset),lookahead:goal,
+  progressMeters:Math.round(progressMeters),segmentIndex:nearest.index,
+  segmentFraction:nearest.t};
 }
 export function routeArrows(points,spacing=85,maxArrows=35){
  if(!Array.isArray(points)||points.length<2)return [];
