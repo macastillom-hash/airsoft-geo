@@ -1,6 +1,6 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {Compass,AlertTriangle,Navigation,Volume2,VolumeX,RefreshCw,ArrowLeft,ArrowRight,
- ArrowUp,CornerDownLeft,Flag,RotateCcw,Speech} from 'lucide-react';
+ ArrowUp,CornerDownLeft,Flag,RotateCcw} from 'lucide-react';
 import {turnNavigation,voiceCueKey,voiceCueText} from './turnNavigation.js';
 import {distanceLabel} from './geo';
 import './route-guide.css';
@@ -39,8 +39,11 @@ export default function RouteGuideHud({me,route,connection,onRecalculate,routeSt
    routeRef.current=route;spoken.current.clear();lastCueTime.current=0;
   }
  },[route]);
- useEffect(()=>()=>{
-  if(typeof window!=='undefined'&&window.speechSynthesis)window.speechSynthesis.cancel();
+ useEffect(()=>{
+  const stopWhenHidden=()=>{if(document.visibilityState!=='visible')window.speechSynthesis?.cancel()};
+  document.addEventListener('visibilitychange',stopWhenHidden);
+  return()=>{document.removeEventListener('visibilitychange',stopWhenHidden);
+   if(typeof window!=='undefined'&&window.speechSynthesis)window.speechSynthesis.cancel()};
  },[]);
  const active=voice&&recent&&guide&&document.visibilityState==='visible'&&connection?.state!=='offline';
  const cue=active?voiceCueKey(guide):null;
@@ -76,7 +79,7 @@ export default function RouteGuideHud({me,route,connection,onRecalculate,routeSt
   <Compass size={18}/> GPS desactualizado. Se pausaron las indicaciones.
  </div>;
  if(!guide)return null;
- return <div className={'v54-route-hud v55-guided '+(guide.offRoute?'offroute':'')} role="status"
+ return <div className={'v54-route-hud v55-guided '+(guide.offRoute?'offroute':'')} role="region"
   aria-label="Guía de orientación peatonal">
   <div className="v55-guide-main">
    <div className="v54-route-arrow-wrap">
