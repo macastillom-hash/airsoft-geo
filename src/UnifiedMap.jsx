@@ -234,7 +234,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
    </MapContainer>}
-   <RouteGuideHud me={me} route={route}/>
+   <RouteGuideHud me={me} route={route} connection={connection} routeStatus={routeStatus} onRecalculate={planRoute}/>
    <NavigationControls me={me} destination={destination} onDestination={chooseDestination}
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
