@@ -15,6 +15,21 @@ const fakeUser={
  user_metadata:{alias:'Prueba'},created_at:'2026-01-01T00:00:00Z',
  updated_at:'2026-01-01T00:00:00Z'
 };
+function mockPolyline(points){
+ let lat=0,lng=0,out='';
+ for(const [a,b] of points){
+  const la=Math.round(a*1e6),lo=Math.round(b*1e6);
+  for(let value of [la-lat,lo-lng]){
+   let n=value<0?~(value<<1):value<<1;
+   while(n>=32){out+=String.fromCharCode(((n&31)|32)+63);n>>>=5}
+   out+=String.fromCharCode(n+63);
+  }
+  lat=la;lng=lo;
+ }
+ return out;
+}
+const mockRouteGeometry=[[4.445,-75.24],[4.4455,-75.24],[4.446,-75.24],
+ [4.446,-75.2395],[4.446,-75.239]];
 const vite=spawn('node',['node_modules/vite/bin/vite.js','--host','127.0.0.1',
  '--port',String(port),'--strictPort'],{
  env:{...process.env,VITE_SUPABASE_URL:fakeUrl,VITE_SUPABASE_ANON_KEY:'public-test-anon-key'},
@@ -81,6 +96,20 @@ try{
  }
  {
   const {page,context,errors}=await makePage(true);
+  await context.grantPermissions(['geolocation'],{origin:host});
+  await context.setGeolocation({latitude:4.445,longitude:-75.24,accuracy:12});
+  await context.route('https://valhalla1.openstreetmap.de/**',async request=>{
+   const response={trip:{summary:{length:0.24,time:195},legs:[{
+    shape:mockPolyline(mockRouteGeometry),
+    maneuvers:[
+     {type:1,begin_shape_index:0,end_shape_index:2,instruction:'Camina hacia el norte.'},
+     {type:10,begin_shape_index:2,end_shape_index:4,instruction:'Gira a la derecha.',
+      verbal_pre_transition_instruction:'Gira a la derecha hacia el objetivo.'},
+     {type:4,begin_shape_index:4,end_shape_index:4,instruction:'Llegaste al destino.'}
+    ]}]}};
+   await request.fulfill({status:200,contentType:'application/json',
+    headers:{'access-control-allow-origin':'*'},body:JSON.stringify(response)});
+  });
   await page.goto(host,{waitUntil:'domcontentloaded',timeout:20000});
   await page.waitForTimeout(3800);
   const body=await page.locator('body').innerText();
@@ -101,6 +130,32 @@ try{
   assert.equal(errors.filter(e=>/ReferenceError|SyntaxError|rendered more hooks/.test(e)).length,0,
    '3D switch errors: '+errors.join('\n').slice(0,2000));
   console.log('PASS: optional 3D switch and 2D fallback keep the mobile UI alive.');
+  // V5.4: full mobile navigation flow, all inside the React map.
+  await page.getByText('GPS disponible').first().waitFor({timeout:12000});
+  await page.getByRole('button',{name:'Abrir o cerrar navegación'}).click();
+  await page.getByRole('button',{name:/Elegir en mapa/}).click();
+  const leaflet=page.locator('.leaflet-container');
+  const rect=await leaflet.boundingBox();
+  assert.ok(rect&&rect.width>200&&rect.height>250,'Leaflet must have tappable bounds');
+  await leaflet.click({position:{x:Math.floor(rect.width*0.52),y:Math.floor(rect.height*0.38)},force:true});
+  await page.getByRole('button',{name:/Cómo llegar aquí/}).waitFor({timeout:8000});
+  await page.getByRole('button',{name:/Cómo llegar aquí/}).click();
+  await page.getByRole('button',{name:'Iniciar navegación guiada'}).waitFor({timeout:8000});
+  await page.getByRole('button',{name:'Iniciar navegación guiada'}).click();
+  await page.locator('.v54-turn-panel').waitFor({timeout:8000});
+  assert.ok((await page.locator('.v54-turn-panel').innerText()).includes('Gira a la derecha'),
+   'Guided UI should use actual mocked Valhalla maneuver, not only bearing');
+  await page.getByRole('button',{name:'Ver mapa 3D'}).click();
+  await page.waitForTimeout(900);
+  assert.ok(await page.locator('.v54-turn-panel').isVisible(),
+   'Guided turn panel must survive switching to 3D');
+  await page.getByRole('button',{name:'Ver calles'}).click();
+  await page.locator('.leaflet-container').waitFor({timeout:8000});
+  await page.getByRole('button',{name:'Finalizar guía'}).click();
+  assert.equal(await page.locator('.v54-turn-panel').count(),0);
+  console.log('PASS: GPS route, actual next turn, start/stop, 3D continuity and no external navigation.');
+  const fatal=errors.filter(e=>/ReferenceError|TypeError|SyntaxError|rendered more hooks/i.test(e));
+  assert.equal(fatal.length,0,fatal.join('\n').slice(0,1600));
 
   await context.close();
  }
