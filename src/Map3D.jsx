@@ -22,7 +22,7 @@ const baseStyle={
 };
 
 export default function Map3D({me,teammates,nearby,objectives,signals,destination,
- route,showTeammates,showNearby,follow,focus,picking,onPick,onChoose,onMember,onUnsupported}){
+ route,showTeammates,showNearby,follow,focus,picking,onPick,onChoose,onMember,onUnsupported,navigationActive=false}){
  const container=useRef(null),mapRef=useRef(null),pinsRef=useRef([]),arrowPinsRef=useRef([]);
  const controls=useRef({picking,onPick,onChoose,onMember,onUnsupported});
  controls.current={picking,onPick,onChoose,onMember,onUnsupported};
@@ -188,12 +188,14 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   const map=mapRef.current;
   if(map&&ready&&me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000&&follow)
    map.easeTo({center:[me.lng,me.lat],duration:350,
-    bearing:Number.isFinite(me.heading)?me.heading:map.getBearing()});
- },[ready,me?.lat,me?.lng,me?.observedAt,me?.heading,follow]);
+    zoom:navigationActive?Math.max(16.5,map.getZoom()):map.getZoom(),
+    pitch:navigationActive?70:map.getPitch(),
+    bearing:Number.isFinite(me.heading)&&me.speed>0.7?me.heading:map.getBearing()});
+ },[ready,me?.lat,me?.lng,me?.observedAt,me?.heading,me?.speed,follow,navigationActive]);
  useEffect(()=>{
   const map=mapRef.current;
   if(map&&ready&&focus&&me&&validCoordinate(me.lat,me.lng))
-   map.flyTo({center:[me.lng,me.lat],zoom:16,pitch:65,duration:500});
+   map.flyTo({center:[me.lng,me.lat],zoom:navigationActive?17:16,pitch:navigationActive?70:65,duration:500});
  },[focus,ready]);
  return <>
   <div className="v53-3d-canvas" ref={container} aria-label="Mapa 3D con imagen satelital y orientación"/>
