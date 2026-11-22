@@ -114,8 +114,9 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   const map=mapRef.current;
   if(map&&ready&&focus&&me&&validCoordinate(me.lat,me.lng))map.flyTo({center:[me.lng,me.lat],zoom:16,pitch:62,duration:500});
  },[focus,ready]);
- return <div className="v53-3d-canvas" ref={container} aria-label="Mapa tridimensional interactivo">
+ return <>
+  <div className="v53-3d-canvas" ref={container} aria-label="Mapa tridimensional interactivo"/>
   {info&&<div className="v53-3d-info">{info}</div>}
   <div className="v53-3d-hint">3D · Inclina con dos dedos o gira con los controles. Los edificios dependen de los datos disponibles.</div>
- </div>;
+ </>;
 }
