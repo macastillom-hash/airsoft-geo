@@ -10,6 +10,12 @@ ALTER TABLE public.activities
 ALTER TABLE public.activities ADD CONSTRAINT f52_activity_timer_consistency
  CHECK(timer_paused_at IS NULL OR (status='active' AND actual_started_at IS NOT NULL));
 
+-- El cliente conserva edición únicamente de campos V3 ya permitidos.
+-- El cronómetro lo modifica exclusivamente la función protegida en el servidor.
+REVOKE UPDATE ON public.activities FROM authenticated;
+GRANT UPDATE (title,description,mode,status,starts_at,duration_minutes,respawn_seconds,updated_at)
+ ON public.activities TO authenticated;
+
 -- Al iniciar una actividad futura, el servidor registra la hora real.
 -- No se inventan horas para actividades anteriores a V5.2.
 CREATE OR REPLACE FUNCTION public.f52_activity_timer_transition()
