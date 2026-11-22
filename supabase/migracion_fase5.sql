@@ -46,6 +46,9 @@ REVOKE ALL ON public.team_roles FROM PUBLIC,anon,authenticated;
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.team_roles TO authenticated;
 CREATE POLICY f5_roles_view ON public.team_roles FOR SELECT TO authenticated
  USING(public.my_team(team_id));
+CREATE POLICY f5_roles_activity_organizer_view ON public.team_roles FOR SELECT TO authenticated
+ USING(EXISTS(SELECT 1 FROM public.activity_teams at JOIN public.activities a ON a.id=at.activity_id
+  WHERE at.team_id=team_roles.team_id AND a.organizer_id=(SELECT auth.uid())));
 CREATE POLICY f5_roles_add ON public.team_roles FOR INSERT TO authenticated
  WITH CHECK(public.is_team_owner(team_id) AND created_by=(SELECT auth.uid()));
 CREATE POLICY f5_roles_edit ON public.team_roles FOR UPDATE TO authenticated
