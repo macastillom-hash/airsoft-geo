@@ -6,8 +6,8 @@ const shell=read('src/UnifiedMap.jsx');
 const css=read('src/map3d.css');
 assert.ok(shell.includes("const [mapStyle,setMapStyle]=useState('street')"),
  'El mapa 2D debe seguir siendo la vista predeterminada.');
-assert.ok(map3d.includes("event.sourceDataType!=='content')return;"),
- 'Se deben escuchar eventos de contenido sin requerir event.tile.');
+assert.ok(map3d.includes("event.isSourceLoaded")&&map3d.includes("'idle'")&&!map3d.includes("!event.tile"),
+ 'No declarar satélite listo antes de que MapLibre indique que terminó de cargar la fuente.');
 assert.ok(!map3d.includes("!streetReady){"),
  'La recuperación del satélite no debe bloquearse si calles ya cargó.');
 assert.ok(map3d.includes("map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');") &&
