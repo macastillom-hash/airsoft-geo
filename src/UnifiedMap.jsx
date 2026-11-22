@@ -91,7 +91,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const liveTeam=!!team,teamId=team?.id;
- useEffect(()=>onNearbyVisibility(layer!=='team'),[layer,onNearbyVisibility]);
+ useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
   if(!teamId){setSignals([]);return;}
   const {data,error}=await supabase.from('team_signals').select('*').eq('team_id',teamId)
