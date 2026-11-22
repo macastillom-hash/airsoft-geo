@@ -73,6 +73,26 @@ CREATE TRIGGER f5_default_team_roles AFTER INSERT ON public.teams
  FOR EACH ROW EXECUTE FUNCTION public.f5_initial_roles();
 REVOKE ALL ON FUNCTION public.f5_initial_roles() FROM PUBLIC,anon,authenticated;
 
+-- Los cambios de catálogo se registran en la auditoría V4 sin bloquear operaciones.
+CREATE OR REPLACE FUNCTION public.f5_audit_role_catalog()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f5$
+BEGIN
+ INSERT INTO public.f4_admin_audit(team_id,actor_id,action,detail)
+ VALUES(CASE WHEN TG_OP='DELETE' THEN OLD.team_id ELSE NEW.team_id END,
+ (SELECT auth.uid()),
+ CASE WHEN TG_OP='INSERT' THEN 'role_created'
+      WHEN TG_OP='DELETE' THEN 'role_deleted' ELSE 'role_updated' END,
+ 'Catálogo operativo: '||left(CASE WHEN TG_OP='DELETE' THEN OLD.name ELSE NEW.name END,36));
+ IF TG_OP='DELETE' THEN RETURN OLD;END IF;
+ RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+ IF TG_OP='DELETE' THEN RETURN OLD;END IF;
+ RETURN NEW;
+END $f5$;
+CREATE TRIGGER f5_audit_team_roles AFTER INSERT OR UPDATE OR DELETE ON public.team_roles
+ FOR EACH ROW EXECUTE FUNCTION public.f5_audit_role_catalog();
+REVOKE ALL ON FUNCTION public.f5_audit_role_catalog() FROM PUBLIC,anon,authenticated;
+
 -- Roles administrativos: owner siempre se deriva de teams.owner_id (nunca se asigna por cliente).
 ALTER TABLE public.team_members
  ADD COLUMN IF NOT EXISTS administrative_role text NOT NULL DEFAULT 'participant'
@@ -108,6 +128,8 @@ BEGIN
  UPDATE public.team_members SET administrative_role=p_administrative,operational_role_id=p_operational
  WHERE team_id=p_team AND user_id=p_member;
  IF NOT FOUND THEN RAISE EXCEPTION 'El usuario no pertenece a este equipo'; END IF;
+ INSERT INTO public.f4_admin_audit(team_id,actor_id,action,detail)
+ VALUES(p_team,(SELECT auth.uid()),'role_assigned','Roles de integrante actualizados');
 END $f5$;
 REVOKE ALL ON FUNCTION public.f5_assign_team_roles(uuid,uuid,text,uuid) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.f5_assign_team_roles(uuid,uuid,text,uuid) TO authenticated;
