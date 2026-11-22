@@ -90,6 +90,7 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection}){
+ const [expanded,setExpanded]=useState(false);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
  const distance=fresh&&destination?metersBetween(me,destination):null;
  const bearing=fresh&&destination?headingTo(me,destination):null;
@@ -112,7 +113,7 @@ export default function NavigationControls({me,destination,onDestination,objecti
  }
  return <div className="v52-nav-panel">
   <div className="v52-nav-top">
-   <div className="v52-nav-title"><Target size={17}/><strong>Navegar a un objetivo</strong></div>
+   <button type="button" className="v52-nav-title" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded} aria-label="Abrir o cerrar navegación"><Target size={17}/><strong>{destination?'Destino: '+destination.name:'Objetivos y navegación'}</strong><span>{expanded?'−':'+'}</span></button>
    <div className="v52-nav-view">
     <button type="button" className={mapStyle==='street'?'active':''} onClick={()=>setMapStyle('street')}
      title="Mapa de calles" aria-label="Ver calles"><MapIcon size={16}/></button>
@@ -120,6 +121,7 @@ export default function NavigationControls({me,destination,onDestination,objecti
      title="Vista satélite" aria-label="Ver satélite"><Satellite size={16}/></button>
    </div>
   </div>
+  {expanded&&<>
   <div className="v52-nav-selector">
    <select aria-label="Objetivos de las actividades" value={selectedId} onChange={chooseZone}>
     <option value="">Selecciona un objetivo autorizado</option>
@@ -148,5 +150,6 @@ export default function NavigationControls({me,destination,onDestination,objecti
    <button type="button" onClick={onRecenter}><Navigation size={15}/> Centrar</button>
   </div>
   <p className="v52-nav-hint">La línea punteada indica distancia directa, no un sendero. «Cómo llegar» abre un proveedor externo de rutas a pie y comparte el destino seleccionado.</p>
+  </>}
  </div>;
 }
