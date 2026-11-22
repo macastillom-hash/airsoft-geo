@@ -149,7 +149,8 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     // Restauración segura si el navegador se detiene varios segundos.
     stutterMonitor=setInterval(()=>{
      const now=performance.now(),delta=now-lastCheck;lastCheck=now;
-     if(!live||document.visibilityState!=='visible')return;
+     if(!live)return;
+     if(document.visibilityState!=='visible'){lastCheck=now;return;}
      if(delta>4500)controls.current.onUnsupported(
       'El 3D saturó la pantalla del teléfono. Se recuperó el mapa 2D.');
     },1000);
