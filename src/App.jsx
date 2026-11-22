@@ -112,6 +112,7 @@ function Dashboard({user,notify}){
   watcher.current=navigator.geolocation.watchPosition(pos=>{
    const p={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,
      heading:Number.isFinite(pos.coords.heading)&&pos.coords.heading>=0?pos.coords.heading:null,
+     speed:Number.isFinite(pos.coords.speed)&&pos.coords.speed>=0?pos.coords.speed:null,
      observedAt:pos.timestamp||Date.now()};
    if(!isValidLocation(p))return;
    current.current=p;setMe(p);
