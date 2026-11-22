@@ -14,8 +14,8 @@ const mustSha=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 const raw=await readFile(path.join(root,'storage-manifest.json'),'utf8');
 const manifest=JSON.parse(raw);
 if(manifest.format!=='airsoft-geo-storage-v1'||!Array.isArray(manifest.files)||
- !Array.isArray(manifest.buckets)||manifest.buckets.length!==2)throw Error('Manifiesto de Storage inválido');
-if(!manifest.buckets.includes('team-media')||!manifest.buckets.includes('direct-media'))throw Error('Falta un bucket obligatorio');
+ !Array.isArray(manifest.buckets)||manifest.buckets.length!==3)throw Error('Manifiesto de Storage inválido');
+if(!manifest.buckets.includes('team-media')||!manifest.buckets.includes('direct-media')||!manifest.buckets.includes('profile-avatars'))throw Error('Falta un bucket obligatorio');
 if(manifest.total_objects!==manifest.files.length)throw Error('Conteo inconsistente de objetos');
 let nbytes=0;
 const keys=new Set(),locals=new Set();
