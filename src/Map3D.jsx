@@ -3,11 +3,11 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {validCoordinate} from './navigationUtils.js';
 import {routeArrows} from './navigationGuide.js';
+import {light3DStyle} from './light3DStyle.js';
 import './map3d.css';
 
 const satelliteTiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-// Base vectorial gratuita, no depende de imágenes satelitales.
-const streetStyle='https://tiles.openfreemap.org/styles/liberty';
+// Cartografía ligera incorporada localmente (ver light3DStyle.js).
 
 export default function Map3D({me,teammates,nearby,objectives,signals,destination,
  route,showTeammates,showNearby,follow,focus,picking,onPick,onChoose,onMember,onUnsupported}){
@@ -58,6 +58,16 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   img.src='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x;
  }
  const [terrainEnabled,setTerrainEnabled]=useState(false);
+ const [buildingsEnabled,setBuildingsEnabled]=useState(true);
+ function toggleBuildings(){
+  const map=mapRef.current;
+  if(!map||!ready||!map.getLayer('airsoft-buildings-3d'))return;
+  const next=!buildingsEnabled;
+  map.setLayoutProperty('airsoft-buildings-3d','visibility',next?'visible':'none');
+  setBuildingsEnabled(next);
+  setInfo(next?'Edificios visibles donde existen datos cartográficos.':
+   'Edificios desactivados para liberar recursos gráficos.');
+ }
  function toggleTerrain(){
   const current=mapRef.current;
   if(!current||!ready)return;
@@ -85,20 +95,27 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  function togglePitch(){
   const current=mapRef.current;
   if(!current||!ready)return;
-  current.easeTo({pitch:current.getPitch()<30?65:0,duration:450});
+  current.easeTo({pitch:current.getPitch()<25?48:0,duration:250});
  }
  useEffect(()=>{
-  let live=true,map=null,watchdog=null,styleReady=false;
+  let live=true,map=null,watchdog=null,stutterMonitor=null,styleReady=false;
+  let lastCheck=performance.now(),vectorErrors=0;
   const canvas=document.createElement('canvas');
-  if(!canvas.getContext('webgl2')){
-   controls.current.onUnsupported('No hay aceleración gráfica WebGL 2. Se mantiene el mapa 2D.');
+  const probe=canvas.getContext('webgl2',{powerPreference:'low-power'});
+  if(!probe){
+   controls.current.onUnsupported('El teléfono no ofrece WebGL 2. Se mantiene el mapa 2D.');
    return;
   }
+  // Evitar mantener un segundo contexto WebGL en memoria.
+  probe.getExtension('WEBGL_lose_context')?.loseContext();
   try{
    map=new maplibregl.Map({
-    container:container.current,style:streetStyle,
+    container:container.current,style:light3DStyle,
     center:me&&validCoordinate(me.lat,me.lng)?[me.lng,me.lat]:[-74.1,4.65],
-    zoom:me?16:6,pitch:65,bearing:0,maxPitch:80,antialias:true,attributionControl:true
+    zoom:me?15:6,pitch:48,bearing:0,maxPitch:65,antialias:false,
+    attributionControl:true,renderWorldCopies:false,fadeDuration:0,
+    pixelRatio:Math.min(window.devicePixelRatio||1,1.25),
+    maxCanvasSize:[1280,1280],maxTileCacheSize:16
    });
    mapRef.current=map;
    map.addControl(new maplibregl.NavigationControl({showCompass:true,showZoom:true}),'bottom-right');
@@ -117,23 +134,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     }catch(error){
      if(live)setInfo('Calles 3D disponibles. No se pudo preparar la fotografía satelital.');
     }
-    try{
-     // La cartografía de edificios es opcional. Una falla vectorial nunca debe
-     // dejar en blanco la fotografía satelital.
-     map.addSource('airsoft-building-vector',{type:'vector',url:'https://tiles.openfreemap.org/planet'});
-     map.addLayer({
-      id:'airsoft-buildings-3d',type:'fill-extrusion',source:'airsoft-building-vector',
-      'source-layer':'building',minzoom:14,
-      paint:{
-       'fill-extrusion-color':'#b0b9c2',
-       'fill-extrusion-height':['coalesce',['to-number',['get','render_height']],['to-number',['get','height']],10],
-       'fill-extrusion-base':['coalesce',['to-number',['get','render_min_height']],['to-number',['get','min_height']],0],
-       'fill-extrusion-opacity':0.70
-      }
-     });
-    }catch(error){
-     if(live)setInfo('La imagen satelital funciona aunque no existan modelos de edificios.');
-    }
+    // Las extrusiones comparten la única fuente vectorial del estilo ligero.
     map.addSource('airsoft-v53-route',{
      type:'geojson',data:{type:'FeatureCollection',features:[]}
     });
@@ -143,11 +144,24 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    // Si tampoco responde la cartografía vectorial, volver a 2D.
     watchdog=setTimeout(()=>{
      if(live&&!styleReady)
-      controls.current.onUnsupported('No se pudieron cargar las calles 3D. Se restauró el mapa 2D.');
-    },14000);
+      controls.current.onUnsupported('No cargó el 3D ligero. Se recuperó el mapa 2D.');
+    },10000);
+    // Restauración segura si el navegador se detiene varios segundos.
+    stutterMonitor=setInterval(()=>{
+     const now=performance.now(),delta=now-lastCheck;lastCheck=now;
+     if(!live)return;
+     if(document.visibilityState!=='visible'){lastCheck=now;return;}
+     if(delta>4500)controls.current.onUnsupported(
+      'El 3D saturó la pantalla del teléfono. Se recuperó el mapa 2D.');
+    },1000);
     map.on('error',event=>{
      if(!live)return;
      const message=String(event?.error?.message||'');
+     if(/tiles\.openfreemap\.org|airsoft-vector|vector tile/i.test(message)){
+      vectorErrors++;
+      if(vectorErrors>=3)controls.current.onUnsupported(
+       'La cartografía 3D no respondió. Se mantiene el GPS en el mapa 2D.');
+     }
      if(/server\.arcgisonline\.com|airsoft-satellite|World_Imagery/i.test(message)){
       console.warn('Airsoft Geo 3D: error de satélite:',message);
       if(map.getLayer('airsoft-satellite-layer')&&
@@ -172,7 +186,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   document.addEventListener('visibilitychange',visibility);
   document.addEventListener('fullscreenchange',resize);
   return()=>{
-   live=false;clearTimeout(watchdog);
+   live=false;clearTimeout(watchdog);clearInterval(stutterMonitor);
    window.removeEventListener('resize',resize);
    document.removeEventListener('visibilitychange',visibility);
    document.removeEventListener('fullscreenchange',resize);
@@ -196,8 +210,13 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    map.setPaintProperty('airsoft-v53-route-line','line-color',routed?'#136be1':'#ffac26');
    map.setPaintProperty('airsoft-v53-route-line','line-dasharray',routed?[1,0.1]:[2,2]);
   }
+ },[ready,route,me?.lat,me?.lng,destination?.lat,destination?.lng]);
+
+ useEffect(()=>{
+  const map=mapRef.current;if(!map||!ready)return;
+  const routed=route?.points?.length>1;
   arrowPinsRef.current.forEach(pin=>pin.remove());arrowPinsRef.current=[];
-  if(routed)for(const item of routeArrows(route.points,85,32)){
+  if(routed)for(const item of routeArrows(route.points,120,16)){
    const el=document.createElement('span');
    el.className='v54-route-arrow';
    el.textContent='➤';
@@ -207,7 +226,8 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     .setLngLat([item.lng,item.lat]).addTo(map);
    arrowPinsRef.current.push(pin);
   }
- },[ready,route,me?.lat,me?.lng,destination?.lat,destination?.lng]);
+
+ },[ready,route?.points]);
 
  useEffect(()=>{
   const map=mapRef.current;if(!map||!ready)return;
@@ -246,7 +266,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  useEffect(()=>{
   const map=mapRef.current;
   if(map&&ready&&focus&&me&&validCoordinate(me.lat,me.lng))
-   map.flyTo({center:[me.lng,me.lat],zoom:16,pitch:65,duration:500});
+   map.easeTo({center:[me.lng,me.lat],zoom:15,pitch:48,duration:300});
  },[focus,ready]);
  return <>
   <div className="v53-3d-canvas" ref={container} aria-label="Mapa de calles 3D con fotografía satelital opcional"/>
@@ -255,11 +275,13 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     aria-pressed={satellite} title="Fotografía satelital opcional: calles 3D permanece operativa si falla el proveedor">
     {checkingSatellite?'Comprobando…':satellite?'Calles 3D':'Ver satélite'}</button>
    <button type="button" onClick={togglePitch} disabled={!ready} title="Alternar entre vista aérea y perspectiva inclinada">Inclinar</button>
+   <button type="button" onClick={toggleBuildings} disabled={!ready} aria-pressed={buildingsEnabled}
+    title="Desactivar edificios para mejorar el rendimiento">{buildingsEnabled?'Edificios':'Activar edificios'}</button>
    <button type="button" onClick={toggleTerrain} disabled={!ready} aria-pressed={terrainEnabled}
     title="Relieve del terreno opcional, con datos abiertos">{terrainEnabled?'Relieve activo':'Relieve'}</button>
   </div>
   {mode==='loading'&&<div className="v54-3d-wait" aria-live="polite">Cargando calles 3D…</div>}
   {info&&<div className="v53-3d-info" role="status">{info}</div>}
-  <div className="v53-3d-hint">V5.8 · Calles 3D independientes del satélite. «Ver satélite» es opcional; gira con dos dedos.</div>
+  <div className="v53-3d-hint">V5.9 · 3D ligero: edificios y rutas, sin efectos pesados. Satélite y relieve opcionales.</div>
  </>;
 }

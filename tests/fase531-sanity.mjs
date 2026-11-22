@@ -28,11 +28,12 @@ assert.deepEqual(routeArrows([path[0]]),[]);
 const map3d=read('src/Map3D.jsx'),map=read('src/UnifiedMap.jsx'),
 nav=read('src/MapNavigation.jsx'),app=read('src/App.jsx'),
 hud=read('src/RouteGuideHud.jsx'),css=read('src/route-guide.css');
-for(const token of ["airsoft-satellite","World_Imagery","openfreemap.org/styles/liberty",
- "watchdog","onUnsupported","airsoft-building-vector","fill-extrusion","routeArrows"]){
+for(const token of ["airsoft-satellite","World_Imagery","light3DStyle",
+ "watchdog","onUnsupported","light3DStyle","routeArrows"]){
  assert.ok(map3d.includes(token),'Missing robust 3D map feature: '+token);
 }
-assert.ok(map3d.includes("addSource('airsoft-building-vector'"),'Buildings layer remains optional');
+assert.ok(read('src/light3DStyle.js').includes("'source-layer':'building'"),
+ 'Buildings extrusions retained in the lightweight style.');
 assert.ok(map3d.includes("img.onload=()=>finish(true)")&&map3d.includes("img.onerror=()=>finish(false)"),
  'Satellite must be explicitly checked before replacing reliable vector street maps.');
 assert.ok(map.includes('<RouteGuideHud me={me} route={route}'));

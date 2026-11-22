@@ -62,7 +62,9 @@ assert.ok(nav.includes("onClick={onCalculateRoute}"),'Route calculation must sta
 assert.ok(!nav.includes('window.open('),'Navigation must not launch external app');
 assert.ok(nav.includes("Ver mapa 3D"));
 assert.ok(map3d.includes("World_Imagery"),"3D must display a reliable satellite basemap");
-assert.ok(map3d.includes("https://tiles.openfreemap.org/planet"),"Optional extruded building source retained");
+assert.ok(map3d.includes("light3DStyle")&&
+ read('src/light3DStyle.js').includes("https://tiles.openfreemap.org/planet"),
+ "Extruded building source retained in the lean single-source map style");
 assert.ok(map3d.includes("showTeammates")&&map3d.includes("showNearby"),'3D must preserve group privacy');
 assert.ok(map3d.includes("validCoordinate")&&map3d.includes("new maplibregl.Map"));
 assert.ok(styles.includes('.v53-route-summary'));
