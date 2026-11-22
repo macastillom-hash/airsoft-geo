@@ -51,6 +51,11 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     if(!live||event.sourceDataType!=='content'||!event.tile)return;
     if(event.sourceId==='airsoft-satellite'){
      satelliteReady=true;
+     if(map.getLayer('airsoft-satellite-layer')&&
+       map.getLayoutProperty('airsoft-satellite-layer','visibility')==='none'&&!streetReady){
+      map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');
+      map.setLayoutProperty('airsoft-streets-layer','visibility','none');
+     }
      setMode('satellite');setInfo('');
     }else if(event.sourceId==='airsoft-streets'){
      streetReady=true;
@@ -86,15 +91,20 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    // WebGL puede funcionar incluso cuando el servidor cartográfico está caído.
    // No confundir una pantalla vacía con un celular incompatible.
    watchdog1=setTimeout(()=>{
-    if(!live||satelliteReady||!map.getLayer('airsoft-streets-layer'))return;
-    map.setLayoutProperty('airsoft-satellite-layer','visibility','none');
-    map.setLayoutProperty('airsoft-streets-layer','visibility','visible');
-    setInfo('No cargó la fotografía satelital. Probando el mapa de calles alternativo.');
-    setMode('fallback');
-    watchdog2=setTimeout(()=>{
-     if(live&&!streetReady&&!satelliteReady)
-      controls.current.onUnsupported('No se pudieron descargar los mapas 3D. Se recuperó el mapa 2D; revisa tu conexión.');
-    },10000);
+    if(!live||satelliteReady)return;
+    try{
+     if(!map.getLayer('airsoft-streets-layer'))throw Error('La base cartográfica no terminó de inicializarse');
+     map.setLayoutProperty('airsoft-satellite-layer','visibility','none');
+     map.setLayoutProperty('airsoft-streets-layer','visibility','visible');
+     setInfo('No cargó la fotografía satelital. Probando el mapa de calles alternativo.');
+     setMode('fallback');
+     watchdog2=setTimeout(()=>{
+      if(live&&!streetReady&&!satelliteReady)
+       controls.current.onUnsupported('No se pudieron descargar los mapas 3D. Se recuperó el mapa 2D; revisa tu conexión.');
+     },10000);
+    }catch{
+     if(live)controls.current.onUnsupported('La cartografía 3D no pudo iniciarse. Se restauró el mapa 2D.');
+    }
    },9000);
    map.on('webglcontextlost',()=>{
     if(live)controls.current.onUnsupported('Se perdió la aceleración gráfica. Se restauró el mapa 2D.');
@@ -107,10 +117,12 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   const visibility=()=>{if(document.visibilityState==='visible')map?.resize()};
   window.addEventListener('resize',resize);
   document.addEventListener('visibilitychange',visibility);
+  document.addEventListener('fullscreenchange',resize);
   return()=>{
    live=false;clearTimeout(watchdog1);clearTimeout(watchdog2);
    window.removeEventListener('resize',resize);
    document.removeEventListener('visibilitychange',visibility);
+   document.removeEventListener('fullscreenchange',resize);
    pinsRef.current.forEach(pin=>pin.remove());pinsRef.current=[];
    arrowPinsRef.current.forEach(pin=>pin.remove());arrowPinsRef.current=[];
    map?.remove();mapRef.current=null;
