@@ -10,6 +10,7 @@ import TeamAdmin from './TeamAdmin';
 import Activities from './Activities';
 import AdminPanel from './AdminPanel';
 import UnifiedMap from './UnifiedMap';
+import useConnectivity from './useConnectivity';
 import ProfileEditor from './ProfileEditor';
 import {NotificationCenter,NotificationSettings} from './NotificationCenter';
 import {loadNotificationSettings,saveNotificationSettings,vibratePattern,playNotificationSound,patterns} from './notificationUtils';
@@ -62,12 +63,13 @@ function MapView({me,teammates,nearby,shared,showNearby}){
  return <div className="map-wrap"><MapContainer center={center} zoom={me?16:6} scrollWheelZoom className="mapbox"><TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>{me&&<><MoveMap position={me}/><Circle center={[me.lat,me.lng]} radius={Math.max(me.accuracy||20,15)} pathOptions={{color:'#147cf5',weight:1,fillOpacity:.08}}/><Marker position={[me.lat,me.lng]} icon={ownIcon}><Popup>Tu posición · precisión aprox. {Math.round(me.accuracy||0)} m {shared?'· Compartiendo':'· Solo local'}</Popup></Marker></>}{teammates.map(p=><Marker key={p.user_id} position={[p.latitude,p.longitude]} icon={teamIcon}><Popup><strong>{p.alias}</strong><br/>Compañero · {me?distanceLabel(metersBetween(me,{lat:p.latitude,lng:p.longitude})):'—'}<br/>Actualizado: {new Date(p.updated_at).toLocaleTimeString('es-CO')}</Popup></Marker>)}{showNearby&&nearby.map(p=><Marker key={p.user_id} position={[p.latitude,p.longitude]} icon={publicIcon}><Popup><strong>{p.alias}</strong><br/>Posición aproximada · {distanceLabel(p.distance_m)}<br/>Marcador redondeado por privacidad</Popup></Marker>)}</MapContainer><div className="map-legend"><span><i className="dot blue"/> Tú</span><span><i className="dot teal"/> Equipo</span>{showNearby&&<span><i className="dot amber"/> Cercanos (aprox.)</span>}</div></div>
 }
 function Dashboard({user,notify}){
+ const connection=useConnectivity();
  const [profile,setProfile]=useState(null),[teams,setTeams]=useState([]),[selectedTeam,setSelectedTeam]=useState(''),[members,setMembers]=useState([]),[positions,setPositions]=useState([]),[nearby,setNearby]=useState([]),[me,setMe]=useState(null),[sharing,setSharing]=useState(false),[tab,setTab]=useState('map'),[showNearby,setShowNearby]=useState(false),[busy,setBusy]=useState(false),[mobileMenu,setMobileMenu]=useState(false);
  const [chatMode,setChatMode]=useState('team'),[selectedPeer,setSelectedPeer]=useState('');
  const [notifications,setNotifications]=useState([]),[loadingNotifications,setLoadingNotifications]=useState(true);
  const [alertSettings,setAlertSettings]=useState(()=>loadNotificationSettings(user.id));
  const seenNotificationIds=useRef(new Set()),notificationsInitialized=useRef(false);
- const watcher=useRef(null),current=useRef(null),sharingRef=useRef(false),teamRef=useRef('');
+ const watcher=useRef(null),current=useRef(null),sharingRef=useRef(false),teamRef=useRef(''),pendingGPSRevoke=useRef(false);
   const lastUploadedGps=useRef(0),gpsUploading=useRef(false),gpsPending=useRef(null),activeTab=useRef('map');
   useEffect(()=>{activeTab.current=tab},[tab]);
  const currentTeam=teams.find(t=>t.id===selectedTeam);
@@ -116,12 +118,21 @@ function Dashboard({user,notify}){
   },err=>notify('GPS: '+err.message,'error'),{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
  },[sendGPS,notify]);
  useEffect(()=>{startLocation();return()=>{if(watcher.current!==null){navigator.geolocation.clearWatch(watcher.current);watcher.current=null;}sharingRef.current=false;supabase.from('positions').delete().eq('user_id',user.id).then(()=>{})}},[startLocation,user.id]);
- async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);if(gpsPending.current){try{await gpsPending.current}catch{}}const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error)notify('No se pudo borrar la última ubicación: '+sqlError(error),'error');else notify('Dejaste de compartir ubicación.','success');return;}if(!me||!me.observedAt||Date.now()-me.observedAt>30000){startLocation();notify('Se necesita una ubicación GPS reciente antes de compartir.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}lastUploadedGps.current=Date.now();sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
+ async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);if(gpsPending.current){try{await gpsPending.current}catch{}}if(connection.state==='offline'){pendingGPSRevoke.current=true;notify('GPS local detenido. SIN INTERNET no se puede confirmar borrado en el servidor; la última ubicación visible caducará y se intentará borrar al reconectar.','error');return;}const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error){pendingGPSRevoke.current=true;notify('Se dejó de enviar GPS, pero no se confirmó el borrado remoto. Se reintentará cuando vuelva la conexión.','error');}else{pendingGPSRevoke.current=false;notify('Dejaste de compartir ubicación.','success');}return;}if(connection.state==='offline'){notify('Sin Internet: no se puede activar la ubicación compartida.','error');return;}if(!me||!me.observedAt||Date.now()-me.observedAt>30000){startLocation();notify('Se necesita una ubicación GPS reciente antes de compartir.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}lastUploadedGps.current=Date.now();pendingGPSRevoke.current=false;sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
  // Refresco incluso si el móvil está quieto. No garantiza ejecución con navegador suspendido.
  useEffect(()=>{if(!sharing)return;const id=setInterval(()=>{if(current.current&&sharingRef.current)sendGPS(current.current)},8000);return()=>clearInterval(id)},[sharing,sendGPS]);
- async function toggleDiscoverable(){if(!profile)return;const next=!profile.discoverable;const {error}=await supabase.from('profiles').update({discoverable:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,discoverable:next});notify(next?'Aparecerás de forma aproximada en «Cercanos» mientras compartas GPS.':'Ya no aparecerás en la búsqueda de usuarios cercanos.','success')}}
+ async function toggleDiscoverable(){if(!profile)return;if(connection.state==='offline'){notify('Sin Internet: no se guardó el cambio de privacidad. Vuelve a intentarlo al reconectar.','error');return;}const next=!profile.discoverable;const {error}=await supabase.from('profiles').update({discoverable:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,discoverable:next});notify(next?'Aparecerás de forma aproximada en «Cercanos» mientras compartas GPS.':'Ya no aparecerás en la búsqueda de usuarios cercanos.','success')}}
  async function updateAlias(e){e.preventDefault();const next=new FormData(e.currentTarget).get('alias')?.trim();if(!next||next.length<3||next.length>40)return;const {error}=await supabase.from('profiles').update({alias:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,alias:next});notify('Perfil actualizado.','success');loadRoster()}}
  async function logout(){sharingRef.current=false;await supabase.from('positions').delete().eq('user_id',user.id);const {error}=await supabase.auth.signOut();if(error)notify(sqlError(error),'error')}
+ useEffect(()=>{if(!connection.reconnectedAt)return;
+  refreshTeams();loadRoster();loadPositions();loadNearby();
+  if(pendingGPSRevoke.current&&!sharingRef.current){
+   supabase.from('positions').delete().eq('user_id',user.id).then(({error})=>{
+    if(!error){pendingGPSRevoke.current=false;notify('Se borró tu última ubicación del servidor al restablecerse Internet.','success')}
+    else notify('Sigue pendiente borrar la última ubicación; no se ha reactivado compartir GPS.','error');
+   });
+  }
+ },[connection.reconnectedAt,user.id,refreshTeams,loadRoster,loadPositions,loadNearby]);
  const loadNotifications=useCallback(async()=>{
   const {data,error}=await supabase.from('app_notifications').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(75);
   if(error){notify('No se pudieron obtener notificaciones: '+sqlError(error),'error');setLoadingNotifications(false);return;}
