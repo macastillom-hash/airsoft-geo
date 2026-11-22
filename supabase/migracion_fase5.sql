@@ -20,6 +20,8 @@ CREATE POLICY f5_avatar_read ON storage.objects FOR SELECT TO authenticated
    SELECT 1 FROM public.profiles pr
    WHERE pr.avatar_path=name AND (pr.id=(SELECT auth.uid()) OR public.is_teammate(pr.id))
  ));
+CREATE POLICY f5_avatar_owner_read ON storage.objects FOR SELECT TO authenticated
+ USING(bucket_id='profile-avatars' AND split_part(name,'/',1)=(SELECT auth.uid())::text);
 CREATE POLICY f5_avatar_upload ON storage.objects FOR INSERT TO authenticated
  WITH CHECK(bucket_id='profile-avatars' AND split_part(name,'/',1)=(SELECT auth.uid())::text
  AND (lower(storage.extension(name)) IN ('jpeg','jpg','png','webp')));
