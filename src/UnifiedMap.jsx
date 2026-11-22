@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {MapContainer,TileLayer,Marker,Popup,Circle,useMap} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPin,Users,Radio,RefreshCw,Navigation,Eye,EyeOff,ArrowLeft,ArrowRight,AlertTriangle,
-  ShieldAlert,HeartPulse,Flag,Undo2,Skull,MoreHorizontal,MessagesSquare,CheckCircle,Clock3} from 'lucide-react';
+  ShieldAlert,HeartPulse,Flag,Undo2,Skull,MoreHorizontal,MessagesSquare,CheckCircle,Clock3,Maximize2,Minimize2,WifiOff} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
@@ -96,7 +96,9 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
  const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
- const shell=useRef(null);
+ const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
+ useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
+ async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
  useEffect(()=>{setDestination(null);setPicking(false)},[team?.id]);
  const liveTeam=!!team,teamId=team?.id;
@@ -139,10 +141,12 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
   adminRole:team?.owner_id===user.id?'owner':members.find(m=>m.user_id===user.id)?.administrative_role||'participant',
   accuracy:me?.accuracy};
  return <div className="stack v5-map-panel">
-  <div className="section-head"><div><h2>Mapa GPS</h2>
-   <p className="muted">Un solo mapa para compañeros y usuarios que aceptaron ser descubiertos. Los avisos son observaciones manuales.</p></div>
-   <button className="btn outline" onClick={onRefresh}><RefreshCw size={16}/> Actualizar</button>
-  </div>
+  <div className="v52-map-topcontrols"><strong>Mapa GPS</strong><div className="v52-map-topactions">
+   <button type="button" className={sharing?'v52-toggle on':'v52-toggle'} disabled={busy} onClick={onToggleSharing} title="Compartir GPS solo con tus equipos"><Navigation size={15}/>{sharing?'GPS compartido':'Compartir GPS'}</button>
+   <button type="button" className={profile?.discoverable?'v52-toggle on':'v52-toggle'} onClick={onToggleDiscoverable} title="Permitir que otros usuarios registrados te encuentren de forma aproximada"><Radio size={15}/>{profile?.discoverable?'Visible en Cercanos':'Permitir que me encuentren'}</button>
+   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
+   <button type="button" className="v52-map-refresh" onClick={toggleFullscreen} aria-label="Expandir mapa" title="Pantalla completa"><Maximize2 size={16}/></button>
+  </div></div>
   <div className="v5-map-toolbar">
    <div className="v5-map-layers" role="group" aria-label="Personas visibles en el mapa">
     {[['team','Mi equipo',Users],['nearby','Cercanos',Radio],['both','Ambos',MapPin]].map(([id,label,Icon])=>
@@ -159,11 +163,13 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    <span><span className={'v5-status-dot '+(sharing?'live':'')}/>{sharing?'Compartido':'Solo local'}</span>
    <span><Users size={14}/> {visibleTeammates.length} compañeros recientes</span>
   </div>
-  <div className="v5-map-shell">
+  <div className="v5-map-shell" ref={shell}>
    <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
-    <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-    <FollowCurrent me={me} focus={focus}/>
+    {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
+     <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
+    <FollowCurrent me={me} focus={focus} follow={follow}/>
+    <NavigationLayers objectives={objectives} destination={destination} onChoose={z=>{setDestination(z);setPicking(false)}} me={me} picking={picking}
+     onPick={(lat,lng)=>{setDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setPicking(false);setFollow(false)}}/>
     {me&&<><Circle center={[me.lat,me.lng]} radius={Math.max(15,me.accuracy||20)}
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
      <Pin kind="mine" profile={meProfile} position={[me.lat,me.lng]}>
