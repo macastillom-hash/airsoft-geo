@@ -10,6 +10,7 @@ import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import {calculateWalkingRoute} from './routeService';
 import {routeGuidance} from './navigationGuide.js';
+import {reliableOffRouteFix,canRetryAutoRoute} from './reroutePolicy.js';
 import RouteGuideHud from './RouteGuideHud';
 const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
  React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
@@ -144,16 +145,17 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
      connection?.state==='offline'||document.visibilityState!=='visible'){
    tracker.count=0;return;
   }
-  if(!me||!Number.isFinite(me.observedAt)||Date.now()-me.observedAt>15000||
-     !Number.isFinite(me.accuracy)||me.accuracy>30){tracker.count=0;return;}
+  if(!me){tracker.count=0;return;}
   if(tracker.lastFix===me.observedAt)return;
   tracker.lastFix=me.observedAt;
   const guidance=routeGuidance(me,route);
-  if(!guidance?.offRoute||guidance.routeDeviationMeters<75||guidance.arrived){
+  if(!reliableOffRouteFix({enabled:autoReroute,routeReady:routeStatus==='ready',
+      online:connection?.state!=='offline',visible:document.visibilityState==='visible',
+      me,guide:guidance})){
    tracker.count=0;return;
   }
   tracker.count+=1;
-  if(tracker.count>=3&&Date.now()-tracker.lastRequest>=120000){
+  if(canRetryAutoRoute(tracker.count,tracker.lastRequest)){
    tracker.count=0;tracker.lastRequest=Date.now();
    notify('Te alejaste de la ruta: consultando un nuevo recorrido dentro de Airsoft Geo.','info');
    planRoute();
