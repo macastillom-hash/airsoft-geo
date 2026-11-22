@@ -2,11 +2,12 @@ import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {MapContainer,TileLayer,Marker,Popup,Circle,useMap} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPin,Users,Radio,RefreshCw,Navigation,Eye,EyeOff,ArrowLeft,ArrowRight,AlertTriangle,
-  ShieldAlert,HeartPulse,Flag,Undo2,Skull,MoreHorizontal,MessagesSquare,CheckCircle,Clock3} from 'lucide-react';
+  ShieldAlert,HeartPulse,Flag,Undo2,Skull,MoreHorizontal,MessagesSquare,CheckCircle,Clock3,Maximize2,Minimize2,WifiOff} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
+import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import './unified-map.css';
 
 export const quickSignals=[
@@ -34,10 +35,12 @@ function Pin({position,profile,kind,children}){
  const marker=useMemo(()=>avatarIcon(avatar,profile.alias,kind),[avatar,profile.alias,kind]);
  return <Marker position={position} icon={marker}><Popup minWidth={230} maxWidth={300}>{children}</Popup></Marker>;
 }
-function FollowCurrent({me,focus}){
+function FollowCurrent({me,focus,follow}){
  const map=useMap(),first=useRef(false);
  useEffect(()=>{if(me&&!first.current){map.setView([me.lat,me.lng],16);first.current=true}},[Boolean(me),map]);
- useEffect(()=>{if(me&&focus>0)map.setView([me.lat,me.lng],16)},[focus,map]);
+ useEffect(()=>{if(me&&focus>0)map.flyTo([me.lat,me.lng],Math.max(15,map.getZoom()))},[focus,map]);
+ useEffect(()=>{if(follow&&me&&me.observedAt&&Date.now()-me.observedAt<=30000&&first.current)map.panTo([me.lat,me.lng],{animate:false})},[follow,me?.lat,me?.lng,me?.observedAt,map]);
+ useEffect(()=>{const redraw=()=>setTimeout(()=>map.invalidateSize(),120);document.addEventListener('fullscreenchange',redraw);return()=>document.removeEventListener('fullscreenchange',redraw)},[map]);
  return null;
 }
 function SignalMarker({signal,alias}){
@@ -88,9 +91,16 @@ function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,onTestVibra
  </div>;
 }
 export default function UnifiedMap({user,profile,team,teams,members,me,sharing,busy,onToggleSharing,
- onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify}){
+ onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection}){
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
+ const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
+ const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
+ const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
+ useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
+ async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
+ const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
+ useEffect(()=>{setDestination(null);setPicking(false)},[team?.id]);
  const liveTeam=!!team,teamId=team?.id;
  useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
@@ -110,6 +120,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  },[teamId,loadSignals]);
  async function sendSignal(kind){
   if(!teamId||sending)return;
+  if(connection?.state==='offline'){notify('SIN CONEXIÓN: no se envió el aviso. Comprueba Internet y vuelve a intentarlo.','error');return;}
   if(['withdrawing','eliminated'].includes(kind)&&!window.confirm('¿Enviar al equipo el aviso "'+signalById[kind].label+'"?'))return;
   setSending(true);
   try{
@@ -130,10 +141,12 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
   adminRole:team?.owner_id===user.id?'owner':members.find(m=>m.user_id===user.id)?.administrative_role||'participant',
   accuracy:me?.accuracy};
  return <div className="stack v5-map-panel">
-  <div className="section-head"><div><h2>Mapa GPS</h2>
-   <p className="muted">Un solo mapa para compañeros y usuarios que aceptaron ser descubiertos. Los avisos son observaciones manuales.</p></div>
-   <button className="btn outline" onClick={onRefresh}><RefreshCw size={16}/> Actualizar</button>
-  </div>
+  <div className="v52-map-topcontrols"><strong>Mapa GPS</strong><div className="v52-map-topactions">
+   <button type="button" className={sharing?'v52-toggle on':'v52-toggle'} disabled={busy} onClick={onToggleSharing} title="Compartir GPS solo con tus equipos"><Navigation size={15}/>{sharing?'GPS compartido':'Compartir GPS'}</button>
+   <button type="button" className={profile?.discoverable?'v52-toggle on':'v52-toggle'} onClick={onToggleDiscoverable} title="Permitir que otros usuarios registrados te encuentren de forma aproximada"><Radio size={15}/>{profile?.discoverable?'Visible en Cercanos':'Permitir que me encuentren'}</button>
+   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
+   <button type="button" className="v52-map-refresh" onClick={toggleFullscreen} aria-label="Expandir mapa" title="Pantalla completa"><Maximize2 size={16}/></button>
+  </div></div>
   <div className="v5-map-toolbar">
    <div className="v5-map-layers" role="group" aria-label="Personas visibles en el mapa">
     {[['team','Mi equipo',Users],['nearby','Cercanos',Radio],['both','Ambos',MapPin]].map(([id,label,Icon])=>
@@ -150,11 +163,13 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    <span><span className={'v5-status-dot '+(sharing?'live':'')}/>{sharing?'Compartido':'Solo local'}</span>
    <span><Users size={14}/> {visibleTeammates.length} compañeros recientes</span>
   </div>
-  <div className="v5-map-shell">
+  <div className="v5-map-shell" ref={shell}>
    <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
-    <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-    <FollowCurrent me={me} focus={focus}/>
+    {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
+     <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
+    <FollowCurrent me={me} focus={focus} follow={follow}/>
+    <NavigationLayers objectives={objectives} destination={destination} onChoose={z=>{setDestination(z);setPicking(false)}} me={me} picking={picking}
+     onPick={(lat,lng)=>{setDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setPicking(false);setFollow(false)}}/>
     {me&&<><Circle center={[me.lat,me.lng]} radius={Math.max(15,me.accuracy||20)}
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
      <Pin kind="mine" profile={meProfile} position={[me.lat,me.lng]}>
@@ -174,18 +189,29 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
    </MapContainer>
+   <NavigationControls me={me} destination={destination} onDestination={d=>{setDestination(d);setPicking(false)}}
+    objectives={objectives} picking={picking} setPicking={setPicking}
+    mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
+    onRecenter={()=>setFocus(v=>v+1)} connection={connection}/>
+   {picking&&<div className="v52-map-press-hint">Toca un lugar del mapa para elegir tu destino.</div>}
+   {connection?.state==='offline'&&<div className="v52-map-offline"><WifiOff size={16}/> Sin conexión: avisos deshabilitados. Los puntos visibles pueden estar desactualizados.</div>}
+   {fullscreen&&<div className="v52-fullscreen-privacy">
+    <button type="button" onClick={onToggleSharing} disabled={busy}>{sharing?'Detener GPS':'Compartir GPS'}</button>
+    <button type="button" onClick={onToggleDiscoverable}>{profile?.discoverable?'Ocultar de Cercanos':'Permitir que me encuentren'}</button>
+    <button type="button" onClick={toggleFullscreen} aria-label="Salir de pantalla completa"><Minimize2 size={17}/></button>
+   </div>}
    <div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
     {quickSignals.filter(q=>q.group==='rival').map(q=><QuickButton key={q.id} type={q.id}
-      send={sendSignal} disabled={sending||!liveTeam} compact/>)}
+      send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
     <button className={'v5-quick v5-more-toggle '+(more?'open':'')} type="button"
       onClick={()=>setMore(o=>!o)} aria-expanded={more} title="Más acciones"><MoreHorizontal size={20}/><span>Más</span></button>
    </div>
    <div className="v5-map-rail-bottom" aria-label="Avisos de situación">
     {['need_help','in_position'].map(id=><QuickButton key={id} type={id} send={sendSignal}
-      disabled={sending||!liveTeam} compact/>)}
+      disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>
    {more&&<div className="v5-more-panel">
-    {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam} compact/>)}
+    {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>}
    <button className="v5-recenter" type="button" disabled={!me} onClick={()=>setFocus(v=>v+1)}
     aria-label="Centrar mapa en mi ubicación" title="Centrar en mí"><Navigation size={18}/></button>
@@ -195,26 +221,21 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {showNear&&<span><i className="v5-legend-dot orange"/> Cercanos aproximados</span>}
    {showTeammates&&<span><i className="v5-legend-dot red"/> Avisos temporales</span>}
   </div>
-  <div className="v5-map-details">
-   <section className="tile"><h3><ShieldAlert size={17}/> Avisos rápidos</h3>
-    <p className="muted small">Los botones del mapa envían un aviso al equipo seleccionado. «Izquierda» y «derecha» son referencias informadas por ti; no indican la coordenada del rival. Duración del marcador: 3 minutos; apoyo y médico: 8 minutos.</p>
-    {!team&&<p className="small muted">Crea o selecciona un equipo para enviar avisos.</p>}
-    {activeSignals.length>0&&<div className="v5-alert-feed">
-     {activeSignals.slice(0,8).map(s=><div key={s.id} className="v5-alert-line">
-      <AlertTriangle size={15}/><div><b>{signalById[s.kind]?.label||'Aviso'}</b>
-       <small>{aliasFor(s.sender_id)} · {new Date(s.created_at).toLocaleTimeString('es-CO')}
-       {s.latitude===null?' · Sin GPS compartido':''}</small></div></div>)}
-    </div>}
-   </section>
-   <section className="tile"><h3><Eye size={17}/> Privacidad y conexiones</h3>
-    <p className="muted small">Consultar Cercanos no activa la publicación de tu ubicación. Para aparecer ante otros usuarios debes compartir GPS y autorizar expresamente que te encuentren.</p>
-    <div className="v5-privacy-buttons">
-     <button className={'btn '+(sharing?'danger':'primary')} disabled={busy} onClick={onToggleSharing}>
-      {sharing?<EyeOff size={16}/>:<Navigation size={16}/>} {sharing?'Dejar de compartir GPS':'Compartir GPS'}</button>
-     <button className="btn outline" onClick={onToggleDiscoverable}>
-      <Radio size={16}/>{profile?.discoverable?'Dejar de aparecer en Cercanos':'Permitir que me encuentren'}</button>
-    </div>
-   </section>
-  </div>
+  <details className="v52-map-extras">
+   <summary>Detalles, avisos y privacidad</summary>
+   <div className="v5-map-details">
+    <section className="tile"><h3><ShieldAlert size={17}/> Avisos recientes</h3>
+     <p className="muted small">Los avisos de rival indican la posición del informante, no la del rival. Caducan automáticamente.</p>
+     {activeSignals.length>0?<div className="v5-alert-feed">{activeSignals.slice(0,12).map(item=>
+      <div key={item.id} className="v5-alert-line"><AlertTriangle size={15}/><div>
+       <b>{signalById[item.kind]?.label||'Aviso'}</b><small>{aliasFor(item.sender_id)} · {new Date(item.created_at).toLocaleTimeString('es-CO')}</small>
+      </div></div>)}</div>:<p className="muted small">Sin avisos vigentes de tu equipo.</p>}
+    </section>
+    <section className="tile"><h3><Eye size={17}/> Información GPS</h3>
+     <p className="muted small">Compartir GPS y permitir que te encuentren son controles independientes, siempre accesibles en la parte superior del mapa. Un objetivo puede elegirse entre las zonas autorizadas o tocando el mapa.</p>
+     <p className="muted small">{objectiveError||'El mapa permite orientación directa y apertura voluntaria de indicaciones peatonales externas.'}</p>
+    </section>
+   </div>
+  </details>
  </div>;
 }

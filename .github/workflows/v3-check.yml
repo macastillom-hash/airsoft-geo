@@ -30,5 +30,13 @@ jobs:
         run: bash -x tests/staging-restore-smoke.sh
       - name: Check V5 map, profiles, and permissions
         run: node tests/fase5-sanity.mjs
+      - name: Check V5.2 GPS, navigation and activity timer
+        run: npm run test:phase52
       - name: Build production bundle
         run: npm run build
+      - name: Install browser runtime for mobile smoke
+        run: |
+          npm install --no-save --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Run Android Chromium UI smoke (auth and map)
+        run: node tests/browser-mobile-smoke.mjs
