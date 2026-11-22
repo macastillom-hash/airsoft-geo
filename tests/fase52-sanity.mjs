@@ -53,9 +53,10 @@ for(const x of ['useAuthorizedObjectives','activity_zones','onPick','externalWal
 for(const x of ['ActivityTimer activity={activity}','connection?.state','loadDetails']){
  assert.ok(activities.includes(x),'Missing activity timer integration '+x);
 }
-for(const x of ['f52_timer_action','timerSnapshot','timer_paused_at']){
- assert.ok(timerUI.includes(x),'Missing timer logic '+x);
+for(const x of ['f52_timer_action','timerSnapshot']){
+ assert.ok(timerUI.includes(x),'Missing timer integration '+x);
 }
+assert.ok(read('src/activityTimerUtils.js').includes('timer_paused_at'),'Paused timestamp must be handled in the calculation');
 for(const x of ["window.addEventListener('offline'","document.addEventListener('visibilitychange'","cache:'no-store'"]){
  assert.ok(hook.includes(x),'Missing connectivity recovery '+x);
 }
