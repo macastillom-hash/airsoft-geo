@@ -104,6 +104,24 @@ try{
 
   await context.close();
  }
+ {
+  const {page,context,errors}=await makePage(false);
+  await page.goto(host+'/tests/browser-turn-guide.html',{waitUntil:'domcontentloaded',timeout:20000});
+  await page.locator('.v55-next-turn').waitFor({timeout:10000});
+  assert.ok((await page.locator('.v55-next-turn').innerText()).includes('Gira a la derecha'),
+   'Mobile turn-by-turn instruction must be rendered');
+  const voiceButton=page.getByRole('button',{name:/Escuchar indicaciones/});
+  assert.ok(await voiceButton.isVisible(),'Voice is an explicit optional control');
+  if(await voiceButton.isEnabled()){
+   await voiceButton.click();
+   assert.equal(await page.getByRole('button',{name:/Voz activada/}).getAttribute('aria-pressed'),'true',
+    'Voice must activate only via user gesture');
+  }
+  const serious=errors.filter(e=>/ReferenceError|TypeError|SyntaxError|React error/.test(e));
+  assert.equal(serious.length,0,'Turn guide browser errors: '+serious.join('\n'));
+  console.log('PASS: mobile next-turn UI and opt-in speech control rendered without JS errors.');
+  await context.close();
+ }
 }finally{
  if(browser)await browser.close();
  vite.kill('SIGTERM');
