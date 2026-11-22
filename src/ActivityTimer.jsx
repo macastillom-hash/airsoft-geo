@@ -1,26 +1,9 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {Clock3,Pause,Play,TimerReset,AlertTriangle,WifiOff} from 'lucide-react';
 import {supabase} from './supabase';
+import {timerSnapshot,timerText} from './activityTimerUtils';
 import './activity-timer.css';
 
-export function timerSnapshot(activity,now=Date.now()){
- const started=Date.parse(activity?.actual_started_at||'');
- if(!Number.isFinite(started))return {started:false,elapsed:0,remaining:null,paused:false,expired:false};
- const paused=activity?.status==='active'&&!!activity.timer_paused_at;
- const freezeAt=paused?Date.parse(activity.timer_paused_at):
-  activity?.timer_stopped_at?Date.parse(activity.timer_stopped_at):now;
- const elapsed=Math.max(0,Math.floor((Math.max(started,Number.isFinite(freezeAt)?freezeAt:now)-started)/1000)
-  -(activity.timer_paused_seconds||0));
- const duration=Math.max(0,Math.round(Number(activity.duration_minutes)||0)*60);
- const remaining=Math.max(0,duration-elapsed);
- return {started:true,elapsed,remaining,paused,expired:elapsed>=duration};
-}
-export function timerText(seconds){
- const secs=Math.max(0,Math.floor(Number(seconds)||0));
- const h=Math.floor(secs/3600),m=Math.floor(secs%3600/60),s=secs%60;
- return h?String(h)+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'):
-  String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-}
 export default function ActivityTimer({activity,isOrganizer,connection,refresh,notify}){
  const [now,setNow]=useState(Date.now()),[busy,setBusy]=useState(false);
  useEffect(()=>{
@@ -55,7 +38,7 @@ export default function ActivityTimer({activity,isOrganizer,connection,refresh,n
   </div>
   {!time.started?<div className="v52-timer-empty">
    <p className="muted small">{active?'Esta actividad comenzó antes de instalar el cronómetro. Puedes iniciarlo ahora sin reiniciar la actividad.':
-    'El cronómetro comenzará automáticamente cuando el organizador inicie la actividad.'}</p>
+    ['finished','cancelled'].includes(activity.status)?'Esta actividad terminó antes de habilitar el cronómetro; no existe un registro histórico de su tiempo.':'El cronómetro comenzará automáticamente cuando el organizador inicie la actividad.'}</p>
    {active&&isOrganizer&&<button className="btn primary" disabled={busy||!enabled} onClick={()=>action('initialize')}><TimerReset size={16}/> Iniciar cronómetro ahora</button>}
   </div>:<>
    <div className="v52-timer-clock" role="timer" aria-label="Tiempo restante">
