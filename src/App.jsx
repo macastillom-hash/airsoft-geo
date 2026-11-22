@@ -83,18 +83,38 @@ function Dashboard({user,notify}){
  const loadNearby=useCallback(async()=>{if(!current.current||!showNearby)return;const {data,error}=await supabase.rpc('nearby_people',{my_lat:current.current.lat,my_lng:current.current.lng});if(!error)setNearby(data||[])},[showNearby]);
  useEffect(()=>{supabase.from('profiles').select('*').eq('id',user.id).single().then(({data,error})=>{if(error)notify(sqlError(error),'error');else setProfile(data)});refreshTeams();},[user.id,refreshTeams]);
  useEffect(()=>{teamRef.current=selectedTeam;loadRoster();},[selectedTeam,loadRoster]);
- useEffect(()=>{loadPositions();const ch=supabase.channel('team-positions').on('postgres_changes',{event:'*',schema:'public',table:'positions'},()=>loadPositions()).subscribe();const id=setInterval(()=>{loadPositions();loadNearby()},12000);return()=>{clearInterval(id);supabase.removeChannel(ch)}},[loadPositions,loadNearby]);
+ useEffect(()=>{loadPositions();const ch=supabase.channel('team-positions').on('postgres_changes',{event:'*',schema:'public',table:'positions'},()=>loadPositions()).subscribe();const id=setInterval(()=>{loadPositions();loadNearby()},tab==='map'?8000:15000);return()=>{clearInterval(id);supabase.removeChannel(ch)}},[loadPositions,loadNearby,tab]);
  useEffect(()=>{loadNearby()},[me?.lat,me?.lng,showNearby]);
  // La lectura local NO transmite GPS. Solo se transmite al activar el control explícito.
- const startLocation=useCallback(()=>{if(!navigator.geolocation){notify('Este navegador no admite geolocalización.','error');return;}if(watcher.current!==null)return;watcher.current=navigator.geolocation.watchPosition(async pos=>{
-  const p={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};if(!isValidLocation(p))return;
-  current.current=p;setMe(p);
-  if(sharingRef.current){const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,accuracy_m:p.accuracy,updated_at:new Date().toISOString()});if(error)notify(sqlError(error),'error')}
- },err=>notify('GPS: '+err.message,'error'),{enableHighAccuracy:true,maximumAge:5000,timeout:15000})},[user.id]);
+ const sendGPS=useCallback(async(p,{force=false}={})=>{
+  if(!force&&!sharingRef.current)return;
+  if(!p||!Number.isFinite(p.observedAt)||Date.now()-p.observedAt>30000)return;
+  const fast=document.visibilityState==='visible'&&['map','activities'].includes(activeTab.current);
+  const cadence=fast?8000:15000;
+  if(gpsUploading.current||(!force&&Date.now()-lastUploadedGps.current<cadence))return;
+  gpsUploading.current=true;
+  try{
+   const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,
+     accuracy_m:p.accuracy,updated_at:new Date().toISOString()});
+   if(error)notify('No se pudo actualizar GPS: '+sqlError(error),'error');
+   else lastUploadedGps.current=Date.now();
+  }finally{gpsUploading.current=false}
+ },[user.id,notify]);
+ const startLocation=useCallback(()=>{
+  if(!navigator.geolocation){notify('Este navegador no admite geolocalización.','error');return;}
+  if(watcher.current!==null)return;
+  watcher.current=navigator.geolocation.watchPosition(pos=>{
+   const p={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,
+     observedAt:pos.timestamp||Date.now()};
+   if(!isValidLocation(p))return;
+   current.current=p;setMe(p);
+   if(sharingRef.current)sendGPS(p);
+  },err=>notify('GPS: '+err.message,'error'),{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+ },[sendGPS,notify]);
  useEffect(()=>{startLocation();return()=>{if(watcher.current!==null){navigator.geolocation.clearWatch(watcher.current);watcher.current=null;}sharingRef.current=false;supabase.from('positions').delete().eq('user_id',user.id).then(()=>{})}},[startLocation,user.id]);
- async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error)notify('No se pudo borrar la última ubicación: '+sqlError(error),'error');else notify('Dejaste de compartir ubicación.','success');return;}if(!me){startLocation();notify('Primero autoriza el GPS y espera a recibir una ubicación.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
+ async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error)notify('No se pudo borrar la última ubicación: '+sqlError(error),'error');else notify('Dejaste de compartir ubicación.','success');return;}if(!me||!me.observedAt||Date.now()-me.observedAt>30000){startLocation();notify('Se necesita una ubicación GPS reciente antes de compartir.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}lastUploadedGps.current=Date.now();sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
  // Refresco incluso si el móvil está quieto. No garantiza ejecución con navegador suspendido.
- useEffect(()=>{if(!sharing)return;const id=setInterval(async()=>{if(current.current&&sharingRef.current){const p=current.current;await supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,accuracy_m:p.accuracy,updated_at:new Date().toISOString()})}},12000);return()=>clearInterval(id)},[sharing,user.id]);
+ useEffect(()=>{if(!sharing)return;const id=setInterval(()=>{if(current.current&&sharingRef.current)sendGPS(current.current)},8000);return()=>clearInterval(id)},[sharing,sendGPS]);
  async function toggleDiscoverable(){if(!profile)return;const next=!profile.discoverable;const {error}=await supabase.from('profiles').update({discoverable:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,discoverable:next});notify(next?'Aparecerás de forma aproximada en «Cercanos» mientras compartas GPS.':'Ya no aparecerás en la búsqueda de usuarios cercanos.','success')}}
  async function updateAlias(e){e.preventDefault();const next=new FormData(e.currentTarget).get('alias')?.trim();if(!next||next.length<3||next.length>40)return;const {error}=await supabase.from('profiles').update({alias:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,alias:next});notify('Perfil actualizado.','success');loadRoster()}}
  async function logout(){sharingRef.current=false;await supabase.from('positions').delete().eq('user_id',user.id);const {error}=await supabase.auth.signOut();if(error)notify(sqlError(error),'error')}
