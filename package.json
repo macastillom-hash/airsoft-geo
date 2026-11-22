@@ -1,6 +1,6 @@
 {
   "name": "airsoft-geo",
-  "version": "5.3.1",
+  "version": "5.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,7 +13,8 @@
     "test:phase5": "node tests/fase5-sanity.mjs",
     "test:phase52": "node tests/fase52-sanity.mjs",
     "test:phase53": "node tests/fase53-sanity.mjs",
-    "test:phase531": "node tests/fase531-sanity.mjs"
+    "test:phase531": "node tests/fase531-sanity.mjs",
+    "test:phase54": "node tests/fase54-sanity.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
