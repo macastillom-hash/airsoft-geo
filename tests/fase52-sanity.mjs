@@ -47,7 +47,7 @@ for(const x of ["mapStyle==='satellite'","NavigationControls","NavigationLayers"
  'v5-map-rail','v5-map-rail-bottom','v52-map-offline','requestFullscreen','connection?.state===']){
  assert.ok(map.includes(x),'Missing map control: '+x);
 }
-for(const x of ['useAuthorizedObjectives','activity_zones','onPick','externalWalkingDirections','window.open']){
+for(const x of ['useAuthorizedObjectives','activity_zones','onPick','onCalculateRoute','Ver mapa 3D']){
  assert.ok(nav.includes(x),'Missing navigation feature '+x);
 }
 for(const x of ['ActivityTimer activity={activity}','connection?.state','loadDetails']){

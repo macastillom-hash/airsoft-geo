@@ -1,4 +1,4 @@
-import React,{useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import React,{lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {MapContainer,TileLayer,Marker,Popup,Circle,useMap} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPin,Users,Radio,RefreshCw,Navigation,Eye,EyeOff,ArrowLeft,ArrowRight,AlertTriangle,
@@ -8,6 +8,16 @@ import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
+import {calculateWalkingRoute} from './routeService';
+const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
+ React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
+}})));
+class Map3DBoundary extends React.Component{
+ constructor(props){super(props);this.state={failed:false}}
+ static getDerivedStateFromError(){return {failed:true}}
+ componentDidCatch(error){console.error('Vista 3D no disponible:',error);this.props.onFailure('El navegador no pudo dibujar 3D. Se restauró el mapa 2D.')}
+ render(){return this.state.failed?null:this.props.children}
+}
 import './unified-map.css';
 
 export const quickSignals=[
@@ -95,12 +105,38 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
+ const [route,setRoute]=useState(null),[routeStatus,setRouteStatus]=useState('idle'),[routeError,setRouteError]=useState('');
+ const routeAbort=useRef(null),[selected3DPerson,setSelected3DPerson]=useState(null);
  const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
  const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
  useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
- useEffect(()=>{setDestination(null);setPicking(false)},[team?.id]);
+ function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
+ useEffect(()=>{chooseDestination(null);setSelected3DPerson(null)},[team?.id]);
+ useEffect(()=>()=>routeAbort.current?.abort(),[]);
+ async function planRoute(){
+  if(!destination||routeStatus==='calculating')return;
+  if(connection?.state==='offline'){setRouteError('Sin Internet; no se puede calcular una ruta.');return}
+  if(!me||!Number.isFinite(me.observedAt)||Date.now()-me.observedAt>30000){setRouteError('Se necesita una ubicación GPS reciente.');return}
+  if(metersBetween(me,destination)>30000){setRouteError('El destino está a más de 30 km; el servicio público de rutas no permite esta búsqueda.');return}
+  routeAbort.current?.abort();const controller=new AbortController();routeAbort.current=controller;
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  setRouteStatus('calculating');setRoute(null);setRouteError('');
+  try{
+   const result=await calculateWalkingRoute(me,destination,controller.signal);
+   if(controller.signal.aborted)return;
+   setRoute(result);setRouteStatus('ready');
+   notify('Ruta peatonal calculada dentro de Airsoft Geo. Verifica la seguridad y acceso de los caminos.','success');
+  }catch(error){
+   if(routeAbort.current!==controller)return;
+   if(controller.signal.aborted){setRouteError('No se pudo calcular la ruta a tiempo.');}
+   else setRouteError('No se pudo obtener un recorrido peatonal de la zona.');
+   setRouteStatus('error');
+  }finally{clearTimeout(timeout);if(routeAbort.current===controller)routeAbort.current=null}
+ }
+ function fallback3D(reason){setMapStyle('street');notify(reason||'Vista 3D no disponible; mapa 2D restaurado.','error')}
+
  const liveTeam=!!team,teamId=team?.id;
  useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
@@ -164,12 +200,20 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    <span><Users size={14}/> {visibleTeammates.length} compañeros recientes</span>
   </div>
   <div className="v5-map-shell" ref={shell}>
-   <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
+   {mapStyle==='3d'?
+    <Map3DBoundary onFailure={fallback3D}><Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
+     <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
+      objectives={objectives} signals={activeSignals} destination={destination} route={route}
+      showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
+      onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
+      onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
+    </Suspense></Map3DBoundary>:
+    <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
     {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
      <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
     <FollowCurrent me={me} focus={focus} follow={follow}/>
-    <NavigationLayers objectives={objectives} destination={destination} onChoose={z=>{setDestination(z);setPicking(false)}} me={me} picking={picking}
-     onPick={(lat,lng)=>{setDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setPicking(false);setFollow(false)}}/>
+    <NavigationLayers objectives={objectives} destination={destination} route={route} onChoose={chooseDestination} me={me} picking={picking}
+     onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}/>
     {me&&<><Circle center={[me.lat,me.lng]} radius={Math.max(15,me.accuracy||20)}
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
      <Pin kind="mine" profile={meProfile} position={[me.lat,me.lng]}>
@@ -188,11 +232,20 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
      </Pin>)}
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
-   </MapContainer>
-   <NavigationControls me={me} destination={destination} onDestination={d=>{setDestination(d);setPicking(false)}}
+   </MapContainer>}
+   <NavigationControls me={me} destination={destination} onDestination={chooseDestination}
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
-    onRecenter={()=>setFocus(v=>v+1)} connection={connection}/>
+    onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
+    routeError={routeError} onCalculateRoute={planRoute}
+    onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
+   {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
+    <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
+    <PlayerCard person={selected3DPerson.kind==='mine'?meProfile:selected3DPerson.person}
+     type={selected3DPerson.kind} me={me} sharing={sharing} team={team} onSignal={sendSignal}
+     busy={sending} onOpenChat={onOpenChat}
+     onTestVibration={()=>notify(vibratePattern('team_alert')?'Se solicitó vibración.':'Vibración no disponible.','info')}/>
+   </div>}
    {picking&&<div className="v52-map-press-hint">Toca un lugar del mapa para elegir tu destino.</div>}
    {connection?.state==='offline'&&<div className="v52-map-offline"><WifiOff size={16}/> Sin conexión: avisos deshabilitados. Los puntos visibles pueden estar desactualizados.</div>}
    {fullscreen&&<div className="v52-fullscreen-privacy">

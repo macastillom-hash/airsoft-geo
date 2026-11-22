@@ -2,10 +2,10 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Marker,Popup,Circle,Polyline,useMapEvents} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
-  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon} from 'lucide-react';
+  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
-import {validCoordinate,headingTo,bearingLabel,externalWalkingDirections} from './navigationUtils';
+import {validCoordinate,headingTo,bearingLabel} from './navigationUtils';
 import './map-navigation.css';
 
 const markerIcon=type=>L.divIcon({
@@ -17,7 +17,7 @@ function DestinationClick({picking,onPick}){
  useMapEvents({click:e=>{if(picking)onPick(e.latlng.lat,e.latlng.lng)}});
  return null;
 }
-export function NavigationLayers({objectives,destination,onChoose,me,picking,onPick}){
+export function NavigationLayers({objectives,destination,onChoose,me,picking,onPick,route}){
  const destIcon=useMemo(()=>markerIcon('selected'),[]);
  const zoneIcon=useMemo(()=>markerIcon('zone'),[]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
@@ -36,9 +36,10 @@ export function NavigationLayers({objectives,destination,onChoose,me,picking,onP
   </Marker>
    {Number.isFinite(destination.radius_m)&&destination.radius_m>0&&
      <Circle center={point} radius={destination.radius_m} pathOptions={{color:'#a86b08',weight:2,fillOpacity:0.04}}/>}
-   {fresh&&<Polyline positions={[[me.lat,me.lng],point]} pathOptions={{
+   {fresh&&!route&&<Polyline positions={[[me.lat,me.lng],point]} pathOptions={{
     color:'#e79421',dashArray:'7 8',weight:3,opacity:0.9
    }}/>}
+   {route?.points?.length>1&&<Polyline positions={route.points} pathOptions={{color:'#1b70d8',weight:5,opacity:0.95}}/>}
   </>}
  </>;
 }
@@ -71,23 +72,19 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
  return {zones,error,reload};
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
- mapStyle,setMapStyle,follow,setFollow,onRecenter,connection}){
+ mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
+ onCalculateRoute,onClearRoute}){
  const [expanded,setExpanded]=useState(false);
+ useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
  const distance=fresh&&destination?metersBetween(me,destination):null;
  const bearing=fresh&&destination?headingTo(me,destination):null;
- const navigationUrl=externalWalkingDirections(destination);
+ const routeReady=route?.points?.length>1;
  const chooseZone=event=>{
   const zone=objectives.find(z=>z.id===event.target.value);
   if(zone)onDestination(zone);
  };
  const selectedId=objectives.some(z=>z.id===destination?.id)?destination.id:'';
- function openDirections(){
-  if(!navigationUrl||connection?.state==='offline')return;
-  // La salida a Maps es una acción explícita; no se envían coordenadas
-  // de terceros ni posiciones de miembros de equipo.
-  window.open(navigationUrl,'_blank','noopener,noreferrer');
- }
  async function copyCoords(){
   if(!destination)return;
   try{await navigator.clipboard.writeText(destination.lat.toFixed(6)+', '+destination.lng.toFixed(6))}
@@ -97,6 +94,8 @@ export default function NavigationControls({me,destination,onDestination,objecti
   <div className="v52-nav-top">
    <button type="button" className="v52-nav-title" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded} aria-label="Abrir o cerrar navegación"><Target size={17}/><strong>{destination?'Destino: '+destination.name:'Objetivos y navegación'}</strong><span>{expanded?'−':'+'}</span></button>
    <div className="v52-nav-view">
+    <button type="button" className={mapStyle==='3d'?'active':''} onClick={()=>setMapStyle('3d')}
+     title="Vista tridimensional dentro de Airsoft Geo" aria-label="Ver mapa 3D"><Box size={16}/><span>3D</span></button>
     <button type="button" className={mapStyle==='street'?'active':''} onClick={()=>setMapStyle('street')}
      title="Mapa de calles" aria-label="Ver calles"><MapIcon size={16}/></button>
     <button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}
@@ -120,18 +119,24 @@ export default function NavigationControls({me,destination,onDestination,objecti
    <div className="v52-destination-buttons">
     <button type="button" title="Copiar coordenadas" aria-label="Copiar coordenadas" onClick={copyCoords}><Copy size={15}/></button>
     <button type="button" title="Limpiar destino" aria-label="Limpiar destino" onClick={()=>onDestination(null)}><X size={16}/></button>
-    <button type="button" className="v52-navigate-external" onClick={openDirections}
-     disabled={!navigationUrl||connection?.state==='offline'} title="Abrir ruta peatonal en Google Maps">
-     <Route size={15}/> Cómo llegar
+    <button type="button" className="v52-navigate-external" onClick={onCalculateRoute}
+     disabled={!fresh||connection?.state==='offline'||routeStatus==='calculating'}
+     title="Calcular ruta a pie dentro de Airsoft Geo">
+     <Footprints size={15}/> {routeStatus==='calculating'?'Calculando…':routeReady?'Recalcular ruta':'Cómo llegar aquí'}
     </button>
+    {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>
   </div>}
+  {routeReady&&<div className="v53-route-summary"><strong>Ruta a pie:</strong> {route.distanceM===null?'—':distanceLabel(route.distanceM)} · {route.durationSeconds===null?'—':Math.max(1,Math.round(route.durationSeconds/60))+' min aproximados'}
+    {route.steps.length>0&&<details><summary>Ver indicaciones ({route.steps.length})</summary><ol>{route.steps.map((step,i)=><li key={i}>{step}</li>)}</ol></details>}
+   </div>}
+  {routeError&&<p className="v53-route-error" role="alert"><AlertCircle size={14}/>{routeError} La línea directa sigue disponible solo como referencia.</p>}
   <div className="v52-nav-secondary">
    <button type="button" onClick={()=>{setFollow(v=>!v);if(!follow)onRecenter()}}>
-    <LocateFixed size={15}/> {follow?'Seguirme: sí':'Seguirme: no'}</button>
+    <LocateFixed size={15}/> {follow?'GPS sígueme activo':'Seguir mi GPS'}</button>
    <button type="button" onClick={onRecenter}><Navigation size={15}/> Centrar</button>
   </div>
-  <p className="v52-nav-hint">La línea punteada indica distancia directa, no un sendero. «Cómo llegar» abre un proveedor externo de rutas a pie y comparte el destino seleccionado.</p>
+  <p className="v52-nav-hint">El rumbo directo no es un sendero. «Cómo llegar aquí» calcula y muestra la ruta dentro de Airsoft Geo. Al pulsarlo, se envían únicamente tu origen y el destino seleccionado al servicio público Valhalla/OpenStreetMap. Su cobertura no es garantizada: verifica el terreno y los caminos permitidos.</p>
   </>}
  </div>;
 }

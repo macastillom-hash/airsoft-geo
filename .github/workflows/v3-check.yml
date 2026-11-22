@@ -32,6 +32,8 @@ jobs:
         run: node tests/fase5-sanity.mjs
       - name: Check V5.2 GPS, navigation and activity timer
         run: npm run test:phase52
+      - name: Check V5.3 internal navigation and 3D fallback
+        run: npm run test:phase53
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke
