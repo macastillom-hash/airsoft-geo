@@ -8,6 +8,9 @@ ALTER TABLE public.profiles
  ADD COLUMN IF NOT EXISTS about_me text NOT NULL DEFAULT '' CHECK(char_length(about_me)<=240),
  ADD COLUMN IF NOT EXISTS avatar_path text;
 
+ALTER TABLE public.profiles ADD CONSTRAINT f5_avatar_owner_path
+ CHECK(avatar_path IS NULL OR split_part(avatar_path,'/',1)=id::text);
+
 INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
 VALUES('profile-avatars','profile-avatars',false,3145728,ARRAY['image/jpeg','image/png','image/webp'])
 ON CONFLICT(id) DO UPDATE SET public=false,file_size_limit=3145728,allowed_mime_types=EXCLUDED.allowed_mime_types;
