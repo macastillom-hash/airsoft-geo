@@ -1,4 +1,4 @@
-import {validCoordinate} from './navigationUtils';
+import {validCoordinate} from './navigationUtils.js';
 
 /** Valhalla entrega trazas peatonales codificadas con precisión 1e6. */
 export function decodePolyline6(encoded){
