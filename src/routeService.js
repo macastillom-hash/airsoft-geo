@@ -57,7 +57,8 @@ export async function calculateWalkingRoute(from,dest,signal){
  return {points,distanceM:Number.isFinite(distanceKm)&&distanceKm>=0?Math.round(distanceKm*1000):null,
   durationSeconds:Number.isFinite(seconds)&&seconds>=0?Math.round(seconds):null,
   maneuvers,
-  steps:maneuvers.slice(0,15).map(x=>x.instruction),
+  steps:(Array.isArray(leg.maneuvers)?leg.maneuvers:[]).slice(0,15)
+   .map(x=>String(x?.instruction||'').trim()).filter(Boolean),
   origin:{lat:from.lat,lng:from.lng},
   calculatedAt:Date.now(),provider:'Valhalla / OpenStreetMap'};
 }
