@@ -53,6 +53,26 @@ CREATE POLICY f5_roles_edit ON public.team_roles FOR UPDATE TO authenticated
 CREATE POLICY f5_roles_delete ON public.team_roles FOR DELETE TO authenticated
  USING(public.is_team_owner(team_id));
 
+-- Catálogo inicial: luego el propietario puede agregar, renombrar o eliminar.
+INSERT INTO public.team_roles(team_id,name,description,created_by)
+SELECT t.id,v.name,'Rol operativo configurable',t.owner_id
+FROM public.teams t CROSS JOIN
+ (VALUES('Líder'),('Explorador'),('Apoyo'),('Comunicaciones'),('Primeros auxilios'),('Participante')) v(name)
+ON CONFLICT(team_id,name) DO NOTHING;
+CREATE OR REPLACE FUNCTION public.f5_initial_roles()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $f5$
+BEGIN
+ INSERT INTO public.team_roles(team_id,name,description,created_by)
+ SELECT NEW.id,v.name,'Rol operativo configurable',NEW.owner_id
+ FROM (VALUES('Líder'),('Explorador'),('Apoyo'),('Comunicaciones'),
+  ('Primeros auxilios'),('Participante')) v(name)
+ ON CONFLICT(team_id,name) DO NOTHING;
+ RETURN NEW;
+END $f5$;
+CREATE TRIGGER f5_default_team_roles AFTER INSERT ON public.teams
+ FOR EACH ROW EXECUTE FUNCTION public.f5_initial_roles();
+REVOKE ALL ON FUNCTION public.f5_initial_roles() FROM PUBLIC,anon,authenticated;
+
 -- Roles administrativos: owner siempre se deriva de teams.owner_id (nunca se asigna por cliente).
 ALTER TABLE public.team_members
  ADD COLUMN IF NOT EXISTS administrative_role text NOT NULL DEFAULT 'participant'
@@ -99,6 +119,9 @@ DECLARE v_team uuid;
 BEGIN
  IF NOT public.f3_is_organizer(p_activity) THEN
    RAISE EXCEPTION 'Solo el organizador asigna roles de actividad';
+ END IF;
+ IF EXISTS(SELECT 1 FROM public.activities WHERE id=p_activity AND status IN ('finished','cancelled')) THEN
+  RAISE EXCEPTION 'No se modifican los roles de actividades cerradas';
  END IF;
  SELECT team_id INTO v_team FROM public.activity_participants
  WHERE activity_id=p_activity AND user_id=p_member;
