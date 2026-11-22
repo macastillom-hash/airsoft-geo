@@ -6,6 +6,7 @@ import {MapPin,Users,Radio,RefreshCw,Navigation,Eye,EyeOff,ArrowLeft,ArrowRight,
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
+import {vibratePattern} from './notificationUtils';
 import './unified-map.css';
 
 export const quickSignals=[
@@ -58,7 +59,7 @@ function QuickButton({type,send,disabled,compact=false}){
   <Icon size={compact?18:20} aria-hidden="true"/><span>{compact?cfg.short:cfg.label}</span>
  </button>;
 }
-function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,busy}){
+function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,onTestVibration,busy}){
  const isMine=type==='mine',isNearby=type==='nearby',role=person.operationalRole||
   (person.adminRole==='owner'?'Propietario':person.adminRole==='admin'?'Administrador':
   person.adminRole==='coordinator'?'Coordinador':'Participante');
@@ -80,9 +81,9 @@ function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,busy}){
   {isNearby?<p className="small muted">Usuario cercano que autorizó aparecer. Su coordenada está redondeada. No puedes ver su posición exacta.</p>:
    <><p className="small muted">Acciones emitidas <strong>desde tu propio usuario y tu equipo</strong>; no modifican el estado de este compañero. El GPS solo se adjunta si está compartido.</p>
     <div className="v5-card-actions">
-     {['need_help','rival_near','medical','in_position'].map(id=><QuickButton key={id} type={id} send={onSignal} disabled={busy||!team} compact/>)}
+     {['need_help','rival_near','medical','in_position','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={onSignal} disabled={busy||!team} compact/>)}
     </div>
-    <button className="v5-open-chat" type="button" onClick={onOpenChat}><MessagesSquare size={15}/> Abrir chat del equipo</button>
+    <div className="v5-player-footer"><button className="v5-open-chat" type="button" onClick={onOpenChat}><MessagesSquare size={15}/> Abrir chat</button><button className="v5-open-chat" type="button" onClick={onTestVibration}><Radio size={15}/> Probar vibración</button></div>
    </>}
  </div>;
 }
@@ -158,17 +159,17 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
      <Pin kind="mine" profile={meProfile} position={[me.lat,me.lng]}>
       <PlayerCard person={meProfile} type="mine" me={me} sharing={sharing}
-       team={team} onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat}/>
+       team={team} onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat} onTestVibration={()=>notify(vibratePattern('team_alert')?'Se solicitó una vibración.':'La vibración no está disponible en este dispositivo.','info')}/>
      </Pin></>}
     {showTeammates&&visibleTeammates.map(p=><Pin key={p.user_id} kind="teammate" profile={p}
       position={[p.latitude,p.longitude]}>
       <PlayerCard person={p} type="teammate" me={me} sharing={sharing} team={team}
-       onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat}/>
+       onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat} onTestVibration={()=>notify(vibratePattern('team_alert')?'Se solicitó una vibración.':'La vibración no está disponible en este dispositivo.','info')}/>
      </Pin>)}
     {showNear&&visibleNearby.map(p=><Pin key={'near-'+p.user_id} kind="nearby" profile={p}
       position={[p.latitude,p.longitude]}>
       <PlayerCard person={p} type="nearby" me={me} sharing={sharing} team={team}
-       onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat}/>
+       onSignal={sendSignal} busy={sending} onOpenChat={onOpenChat} onTestVibration={()=>notify(vibratePattern('team_alert')?'Se solicitó una vibración.':'La vibración no está disponible en este dispositivo.','info')}/>
      </Pin>)}
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
