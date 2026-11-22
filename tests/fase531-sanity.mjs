@@ -28,17 +28,17 @@ assert.deepEqual(routeArrows([path[0]]),[]);
 const map3d=read('src/Map3D.jsx'),map=read('src/UnifiedMap.jsx'),
 nav=read('src/MapNavigation.jsx'),app=read('src/App.jsx'),
 hud=read('src/RouteGuideHud.jsx'),css=read('src/route-guide.css');
-for(const token of ["airsoft-satellite","World_Imagery","airsoft-streets",
- "tile.openstreetmap.org","watchdog1","watchdog2","onUnsupported",
- "airsoft-building-vector","fill-extrusion","routeArrows"]){
- assert.ok(map3d.includes(token),'Missing robust map feature: '+token);
+for(const token of ["airsoft-satellite","World_Imagery","openfreemap.org/styles/liberty",
+ "watchdog","onUnsupported","airsoft-building-vector","fill-extrusion","routeArrows"]){
+ assert.ok(map3d.includes(token),'Missing robust 3D map feature: '+token);
 }
-assert.ok(map3d.includes("addSource('airsoft-building-vector'"),'Buildings layer must be optional');
-assert.ok(map3d.includes("map.on('sourcedata'"),'Map must detect whether imagery really loads');
+assert.ok(map3d.includes("addSource('airsoft-building-vector'"),'Buildings layer remains optional');
+assert.ok(map3d.includes("img.onload=()=>finish(true)")&&map3d.includes("img.onerror=()=>finish(false)"),
+ 'Satellite must be explicitly checked before replacing reliable vector street maps.');
 assert.ok(map.includes('<RouteGuideHud me={me} route={route}'));
 assert.ok(nav.includes("routeArrows(route?.points"),'2D must show directional route arrows');
 assert.ok(hud.includes('GPS desactualizado')&&hud.includes('headingAvailable'));
 assert.ok(css.includes('.v54-route-hud'));
 assert.ok(app.includes('heading:Number.isFinite(pos.coords.heading)'));
 assert.ok(!map3d.includes('VITE_GOOGLE_MAPS_API_KEY'),'Free map must not require unconfigured Google keys');
-console.log('V5.3.1 PASS: 3D satellite fallback, on-map route arrows and honest GPS heading guidance');
+console.log('V5.3.1 PASS: free vector 3D fallback, on-map route arrows and honest GPS heading guidance');
