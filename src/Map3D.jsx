@@ -28,6 +28,36 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  controls.current={picking,onPick,onChoose,onMember,onUnsupported};
  const [ready,setReady]=useState(false);
  const [mode,setMode]=useState('loading'),[info,setInfo]=useState('');
+ const [terrainEnabled,setTerrainEnabled]=useState(false);
+ function toggleTerrain(){
+  const current=mapRef.current;
+  if(!current||!ready)return;
+  try{
+   if(terrainEnabled){
+    current.setTerrain(null);
+    setTerrainEnabled(false);
+    setInfo('');
+   }else{
+    if(!current.getSource('airsoft-terrain-dem'))current.addSource('airsoft-terrain-dem',{
+     type:'raster-dem',
+     tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+     tileSize:256,maxzoom:14,encoding:'terrarium',
+     attribution:'Terreno: Mapzen / AWS Open Data'
+    });
+    current.setTerrain({source:'airsoft-terrain-dem',exaggeration:1});
+    setTerrainEnabled(true);
+    setInfo('Relieve activado. Su disponibilidad depende de la conexión y los datos de elevación.');
+   }
+  }catch{
+   setTerrainEnabled(false);
+   setInfo('El relieve no está disponible. Puedes seguir usando la vista 3D y el GPS.');
+  }
+ }
+ function togglePitch(){
+  const current=mapRef.current;
+  if(!current||!ready)return;
+  current.easeTo({pitch:current.getPitch()<30?65:0,duration:450});
+ }
  useEffect(()=>{
   let live=true,map=null,watchdog1=null,watchdog2=null;
   const canvas=document.createElement('canvas');
@@ -48,18 +78,22 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     if(controls.current.picking)controls.current.onPick(event.lngLat.lat,event.lngLat.lng);
    });
    map.on('sourcedata',event=>{
-    if(!live||event.sourceDataType!=='content'||!event.tile)return;
+    if(!live||!event.isSourceLoaded||!['content','idle'].includes(event.sourceDataType))return;
     if(event.sourceId==='airsoft-satellite'){
      satelliteReady=true;
-     if(map.getLayer('airsoft-satellite-layer')&&
-       map.getLayoutProperty('airsoft-satellite-layer','visibility')==='none'&&!streetReady){
+     // La capa de calles está encima de satélite. Una carga tardía
+     // debe recuperar satélite incluso si calles ya respondió.
+     if(map.getLayer('airsoft-satellite-layer')&&map.getLayer('airsoft-streets-layer')){
       map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');
       map.setLayoutProperty('airsoft-streets-layer','visibility','none');
      }
      setMode('satellite');setInfo('');
     }else if(event.sourceId==='airsoft-streets'){
      streetReady=true;
-     setMode('streets');
+     // No sobrescribir el estado si satélite ya se recuperó.
+     if(!satelliteReady&&map.getLayer('airsoft-streets-layer')&&
+        map.getLayoutProperty('airsoft-streets-layer','visibility')==='visible')
+      setMode('streets');
     }
    });
    map.on('load',()=>{
@@ -94,9 +128,11 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     if(!live||satelliteReady)return;
     try{
      if(!map.getLayer('airsoft-streets-layer'))throw Error('La base cartográfica no terminó de inicializarse');
-     map.setLayoutProperty('airsoft-satellite-layer','visibility','none');
+     // Conservar satélite visible por debajo de calles para que
+     // las teselas que lleguen tarde puedan restaurarse automáticamente.
+     map.setLayoutProperty('airsoft-satellite-layer','visibility','visible');
      map.setLayoutProperty('airsoft-streets-layer','visibility','visible');
-     setInfo('No cargó la fotografía satelital. Probando el mapa de calles alternativo.');
+     setInfo('La imagen satelital tarda en responder. Mostrando calles mientras se sigue intentando.');
      setMode('fallback');
      watchdog2=setTimeout(()=>{
       if(live&&!streetReady&&!satelliteReady)
@@ -106,6 +142,14 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
      if(live)controls.current.onUnsupported('La cartografía 3D no pudo iniciarse. Se restauró el mapa 2D.');
     }
    },9000);
+   map.on('error',event=>{
+    if(!live)return;
+    const message=String(event?.error?.message||'');
+    if(/server\.arcgisonline\.com|airsoft-satellite|World_Imagery/i.test(message))
+     console.warn('Airsoft Geo 3D: error de imagen satelital:',message);
+    if(/elevation-tiles-prod|airsoft-terrain-dem/i.test(message))
+     console.warn('Airsoft Geo 3D: error de elevación:',message);
+   });
    map.on('webglcontextlost',()=>{
     if(live)controls.current.onUnsupported('Se perdió la aceleración gráfica. Se restauró el mapa 2D.');
    });
@@ -197,6 +241,11 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
  },[focus,ready]);
  return <>
   <div className="v53-3d-canvas" ref={container} aria-label="Mapa 3D con imagen satelital y orientación"/>
+  <div className="v56-3d-tools" role="group" aria-label="Opciones adicionales de vista 3D">
+   <button type="button" onClick={togglePitch} disabled={!ready} title="Alternar entre vista aérea y perspectiva inclinada">Inclinar</button>
+   <button type="button" onClick={toggleTerrain} disabled={!ready} aria-pressed={terrainEnabled}
+    title="Relieve del terreno opcional, con datos abiertos">{terrainEnabled?'Relieve activo':'Relieve'}</button>
+  </div>
   {mode==='loading'&&<div className="v54-3d-wait" aria-live="polite">Cargando imagen satelital…</div>}
   {info&&<div className="v53-3d-info" role="status">{info}</div>}
   <div className="v53-3d-hint">Perspectiva 3D · Imagen satelital con edificios donde existan datos. Arrastra con dos dedos para inclinar o girar.</div>

@@ -38,6 +38,12 @@ jobs:
         run: npm run test:phase531
       - name: Check V5.4 maneuvers, speech and consent-based rerouting
         run: npm run test:phase54
+      - name: Check V5.5 optional 3D terrain and satellite recovery
+        run: npm run test:phase55
+      - name: Check V5.6 optional live camera, compass and privacy
+        run: npm run test:phase56
+      - name: Check V5.7 free-tier media optimization
+        run: npm run test:phase57
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke

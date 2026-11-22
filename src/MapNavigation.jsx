@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Marker,Popup,Circle,Polyline,useMapEvents} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
-  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle} from 'lucide-react';
+  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle,Camera} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {validCoordinate,headingTo,bearingLabel} from './navigationUtils';
@@ -78,7 +78,7 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
- onCalculateRoute,onClearRoute,autoReroute,onToggleAutoReroute}){
+ onCalculateRoute,onClearRoute,onOpenCamera,autoReroute,onToggleAutoReroute}){
  const [expanded,setExpanded]=useState(false);
  useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
@@ -128,6 +128,10 @@ export default function NavigationControls({me,destination,onDestination,objecti
      disabled={!fresh||connection?.state==='offline'||routeStatus==='calculating'}
      title="Calcular ruta a pie dentro de Airsoft Geo">
      <Footprints size={15}/> {routeStatus==='calculating'?'Calculando…':routeReady?'Recalcular ruta':'Cómo llegar aquí'}
+    </button>
+    <button type="button" className="v56-open-camera" onClick={onOpenCamera}
+     title="Orientación experimental con cámara y brújula; la vista permanece dentro de Airsoft Geo">
+     <Camera size={15}/> Cámara en vivo
     </button>
     {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>

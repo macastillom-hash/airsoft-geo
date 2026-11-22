@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {MB,MEDIA_LIMITS,MEDIA_TYPES,mediaKind,validateAttachment,prepareAttachment} from '../src/mediaLimits.js';
+const file=(type,size,name='adjunto')=>({type,size,name});
+assert.equal(MEDIA_LIMITS.image,2*MB);
+assert.equal(MEDIA_LIMITS.video,6*MB);
+assert.equal(mediaKind('image/webp'),'image');
+assert.equal(mediaKind('video/mp4'),'video');
+assert.equal(mediaKind('application/pdf'),'document');
+assert.equal(mediaKind('application/x-msdownload'),null);
+assert.ok(MEDIA_TYPES.includes('audio/webm'));
+assert.throws(()=>validateAttachment(file('video/mp4',6*MB+1)),/6 MB/);
+assert.throws(()=>validateAttachment(file('audio/webm',3*MB+1)),/3 MB/);
+assert.throws(()=>validateAttachment(file('application/pdf',5*MB+1)),/5 MB/);
+assert.throws(()=>validateAttachment(file('image/png',15*MB+1)),/15 MB/);
+assert.throws(()=>validateAttachment(file('text/html',100)),/Formato no permitido/);
+assert.throws(()=>validateAttachment(file('video/mp4',0)),/vacío/);
+assert.equal(validateAttachment(file('video/mp4',3*MB)),'video');
+const a=file('audio/webm',600000);
+assert.equal(await prepareAttachment(a),a,'El audio válido no se transforma.');
+const img=file('image/jpeg',120000);
+assert.equal(await prepareAttachment(img),img,'Imágenes pequeñas no se recomprimen.');
+const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+for(const p of ['src/App.jsx','src/DirectChat.jsx']){
+ const code=read(p);
+ assert.ok(code.includes('prepareAttachment(file)'),p+' debe preparar el adjunto antes de subir.');
+ assert.ok(code.includes('contentType:prepared.type'),p+' debe conservar el MIME real.');
+ assert.ok(code.includes('file_name:prepared?.name'),p+' debe guardar el nombre del archivo optimizado.');
+ assert.ok(!code.includes("file.size>10*1024*1024"),p+' no debe mantener el antiguo límite de 10 MB.');
+}
+const shell=read('src/UnifiedMap.jsx');
+assert.ok(shell.includes("const [mapStyle,setMapStyle]=useState('street')"),'2D sigue predeterminado.');
+console.log('V5.7 PASS: límites gratuitos de adjuntos, compresión bajo demanda y compatibilidad 2D.');

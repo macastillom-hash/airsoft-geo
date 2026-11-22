@@ -22,3 +22,7 @@
 .v55-reroute-toggle strong{font-size:11px;color:#1c557b}
 .v55-reroute-toggle small{font-size:10px;line-height:1.4;color:#53758c}
 @media(max-width:690px){.v55-reroute-toggle{padding:7px}.v55-reroute-toggle strong{font-size:10px}.v55-reroute-toggle small{font-size:9px}}
+
+/* V5.6: acceso optativo a la cámara sin cambiar de aplicación */
+.v52-destination-buttons .v56-open-camera{background:#174f67;color:#fff;border-color:#174f67}
+.v52-destination-buttons .v56-open-camera:hover,.v52-destination-buttons .v56-open-camera:focus-visible{background:#0c6c84;outline:2px solid #61c4d5}
