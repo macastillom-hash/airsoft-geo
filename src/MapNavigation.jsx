@@ -75,6 +75,7 @@ export default function NavigationControls({me,destination,onDestination,objecti
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
  onCalculateRoute,onClearRoute}){
  const [expanded,setExpanded]=useState(false);
+ useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
  const distance=fresh&&destination?metersBetween(me,destination):null;
  const bearing=fresh&&destination?headingTo(me,destination):null;
