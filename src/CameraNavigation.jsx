@@ -8,8 +8,9 @@ export default function CameraNavigation({me,destination,route,onClose}){
  const [status,setStatus]=useState('idle'),[error,setError]=useState('');
  const [heading,setHeading]=useState(null),[sensor,setSensor]=useState('waiting');
  const [now,setNow]=useState(Date.now());
- const guidance=useMemo(()=>cameraNavigation(me,destination,route,heading,now),
-  [me?.lat,me?.lng,me?.accuracy,me?.observedAt,destination?.lat,destination?.lng,route,heading,now]);
+ const liveHeading=now-lastReading.current<3500?heading:null;
+ const guidance=useMemo(()=>cameraNavigation(me,destination,route,liveHeading,now),
+  [me?.lat,me?.lng,me?.accuracy,me?.observedAt,destination?.lat,destination?.lng,route,liveHeading,now]);
 
  function stopTracks(){
   const stream=streamRef.current;
@@ -104,7 +105,9 @@ export default function CameraNavigation({me,destination,route,onClose}){
    if(!videoRef.current)throw Error('video unavailable');
    videoRef.current.srcObject=stream;
    await videoRef.current.play();
-   if(!alive.current){stopTracks();return}
+   if(!alive.current||document.visibilityState==='hidden'){
+    stopTracks();if(alive.current)setStatus('paused');return;
+   }
    setStatus('active');
   }catch{
    stopTracks();
