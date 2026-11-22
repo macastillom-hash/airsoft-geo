@@ -58,6 +58,16 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   img.src='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x;
  }
  const [terrainEnabled,setTerrainEnabled]=useState(false);
+ const [buildingsEnabled,setBuildingsEnabled]=useState(true);
+ function toggleBuildings(){
+  const map=mapRef.current;
+  if(!map||!ready||!map.getLayer('airsoft-buildings-3d'))return;
+  const next=!buildingsEnabled;
+  map.setLayoutProperty('airsoft-buildings-3d','visibility',next?'visible':'none');
+  setBuildingsEnabled(next);
+  setInfo(next?'Edificios visibles donde existen datos cartográficos.':
+   'Edificios desactivados para liberar recursos gráficos.');
+ }
  function toggleTerrain(){
   const current=mapRef.current;
   if(!current||!ready)return;
@@ -88,12 +98,16 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   current.easeTo({pitch:current.getPitch()<25?48:0,duration:250});
  }
  useEffect(()=>{
-  let live=true,map=null,watchdog=null,styleReady=false;
+  let live=true,map=null,watchdog=null,stutterMonitor=null,styleReady=false;
+  let lastCheck=performance.now(),vectorErrors=0;
   const canvas=document.createElement('canvas');
-  if(!canvas.getContext('webgl2')){
-   controls.current.onUnsupported('No hay aceleración gráfica WebGL 2. Se mantiene el mapa 2D.');
+  const probe=canvas.getContext('webgl2',{powerPreference:'low-power'});
+  if(!probe){
+   controls.current.onUnsupported('El teléfono no ofrece WebGL 2. Se mantiene el mapa 2D.');
    return;
   }
+  // Evitar mantener un segundo contexto WebGL en memoria.
+  probe.getExtension('WEBGL_lose_context')?.loseContext();
   try{
    map=new maplibregl.Map({
     container:container.current,style:light3DStyle,
@@ -131,10 +145,22 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     watchdog=setTimeout(()=>{
      if(live&&!styleReady)
       controls.current.onUnsupported('No cargó el 3D ligero. Se recuperó el mapa 2D.');
-    },14000);
+    },10000);
+    // Restauración segura si el navegador se detiene varios segundos.
+    stutterMonitor=setInterval(()=>{
+     const now=performance.now(),delta=now-lastCheck;lastCheck=now;
+     if(!live||document.visibilityState!=='visible')return;
+     if(delta>4500)controls.current.onUnsupported(
+      'El 3D saturó la pantalla del teléfono. Se recuperó el mapa 2D.');
+    },1000);
     map.on('error',event=>{
      if(!live)return;
      const message=String(event?.error?.message||'');
+     if(/tiles\.openfreemap\.org|airsoft-vector|vector tile/i.test(message)){
+      vectorErrors++;
+      if(vectorErrors>=3)controls.current.onUnsupported(
+       'La cartografía 3D no respondió. Se mantiene el GPS en el mapa 2D.');
+     }
      if(/server\.arcgisonline\.com|airsoft-satellite|World_Imagery/i.test(message)){
       console.warn('Airsoft Geo 3D: error de satélite:',message);
       if(map.getLayer('airsoft-satellite-layer')&&
@@ -159,7 +185,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   document.addEventListener('visibilitychange',visibility);
   document.addEventListener('fullscreenchange',resize);
   return()=>{
-   live=false;clearTimeout(watchdog);
+   live=false;clearTimeout(watchdog);clearInterval(stutterMonitor);
    window.removeEventListener('resize',resize);
    document.removeEventListener('visibilitychange',visibility);
    document.removeEventListener('fullscreenchange',resize);
@@ -248,6 +274,8 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     aria-pressed={satellite} title="Fotografía satelital opcional: calles 3D permanece operativa si falla el proveedor">
     {checkingSatellite?'Comprobando…':satellite?'Calles 3D':'Ver satélite'}</button>
    <button type="button" onClick={togglePitch} disabled={!ready} title="Alternar entre vista aérea y perspectiva inclinada">Inclinar</button>
+   <button type="button" onClick={toggleBuildings} disabled={!ready} aria-pressed={buildingsEnabled}
+    title="Desactivar edificios para mejorar el rendimiento">{buildingsEnabled?'Edificios':'Activar edificios'}</button>
    <button type="button" onClick={toggleTerrain} disabled={!ready} aria-pressed={terrainEnabled}
     title="Relieve del terreno opcional, con datos abiertos">{terrainEnabled?'Relieve activo':'Relieve'}</button>
   </div>
