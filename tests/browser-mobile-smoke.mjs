@@ -101,6 +101,21 @@ try{
   assert.equal(errors.filter(e=>/ReferenceError|SyntaxError|rendered more hooks/.test(e)).length,0,
    '3D switch errors: '+errors.join('\n').slice(0,2000));
   console.log('PASS: optional 3D switch and 2D fallback keep the mobile UI alive.');
+  // V5.6: elegir un destino y abrir/cerrar cámara sin solicitar permisos.
+  await page.locator('.v52-nav-title').click();
+  await page.getByRole('button',{name:'Elegir en mapa'}).click();
+  await page.locator('.leaflet-container').click({position:{x:110,y:120}});
+  await page.locator('.v52-destination-line').waitFor({timeout:8000});
+  await page.getByRole('button',{name:'Cámara en vivo'}).click();
+  await page.getByRole('dialog',{name:'Orientación con cámara en vivo'}).waitFor({timeout:12000});
+  assert.ok((await page.locator('.v56-camera').innerText()).includes('Activar cámara'),
+   'La cámara no debe solicitar permiso sin pulsación explícita.');
+  await page.getByRole('button',{name:'Cerrar cámara y volver al mapa'}).click();
+  await page.locator('.v56-camera').waitFor({state:'detached',timeout:8000});
+  await page.locator('.leaflet-container').waitFor({timeout:8000});
+  assert.equal(errors.filter(e=>/ReferenceError|TypeError|SyntaxError|React error/.test(e)).length,0,
+   'Camera open/close regression: '+errors.join('\n').slice(0,2000));
+  console.log('PASS: camera modal stays in Airsoft Geo, waits for consent and returns to 2D.');
 
   await context.close();
  }
