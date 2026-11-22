@@ -68,7 +68,7 @@ function Dashboard({user,notify}){
  const [alertSettings,setAlertSettings]=useState(()=>loadNotificationSettings(user.id));
  const seenNotificationIds=useRef(new Set()),notificationsInitialized=useRef(false);
  const watcher=useRef(null),current=useRef(null),sharingRef=useRef(false),teamRef=useRef('');
-  const lastUploadedGps=useRef(0),gpsUploading=useRef(false),activeTab=useRef('map');
+  const lastUploadedGps=useRef(0),gpsUploading=useRef(false),gpsPending=useRef(null),activeTab=useRef('map');
   useEffect(()=>{activeTab.current=tab},[tab]);
  const currentTeam=teams.find(t=>t.id===selectedTeam);
  const directPeers=members.filter(m=>m.user_id!==user.id);
@@ -94,11 +94,13 @@ function Dashboard({user,notify}){
   if(gpsUploading.current||(!force&&Date.now()-lastUploadedGps.current<cadence))return;
   gpsUploading.current=true;
   try{
-   const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,
+   const pending=supabase.from('positions').upsert({user_id:user.id,latitude:p.lat,longitude:p.lng,
      accuracy_m:p.accuracy,updated_at:new Date().toISOString()});
+   gpsPending.current=pending;
+   const {error}=await pending;
    if(error)notify('No se pudo actualizar GPS: '+sqlError(error),'error');
    else lastUploadedGps.current=Date.now();
-  }finally{gpsUploading.current=false}
+  }finally{gpsUploading.current=false;gpsPending.current=null}
  },[user.id,notify]);
  const startLocation=useCallback(()=>{
   if(!navigator.geolocation){notify('Este navegador no admite geolocalización.','error');return;}
@@ -112,7 +114,7 @@ function Dashboard({user,notify}){
   },err=>notify('GPS: '+err.message,'error'),{enableHighAccuracy:true,maximumAge:5000,timeout:15000});
  },[sendGPS,notify]);
  useEffect(()=>{startLocation();return()=>{if(watcher.current!==null){navigator.geolocation.clearWatch(watcher.current);watcher.current=null;}sharingRef.current=false;supabase.from('positions').delete().eq('user_id',user.id).then(()=>{})}},[startLocation,user.id]);
- async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error)notify('No se pudo borrar la última ubicación: '+sqlError(error),'error');else notify('Dejaste de compartir ubicación.','success');return;}if(!me||!me.observedAt||Date.now()-me.observedAt>30000){startLocation();notify('Se necesita una ubicación GPS reciente antes de compartir.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}lastUploadedGps.current=Date.now();sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
+ async function toggleSharing(){if(sharing){sharingRef.current=false;setSharing(false);if(gpsPending.current){try{await gpsPending.current}catch{}}const {error}=await supabase.from('positions').delete().eq('user_id',user.id);if(error)notify('No se pudo borrar la última ubicación: '+sqlError(error),'error');else notify('Dejaste de compartir ubicación.','success');return;}if(!me||!me.observedAt||Date.now()-me.observedAt>30000){startLocation();notify('Se necesita una ubicación GPS reciente antes de compartir.','error');return;}setBusy(true);const {error}=await supabase.from('positions').upsert({user_id:user.id,latitude:me.lat,longitude:me.lng,accuracy_m:me.accuracy,updated_at:new Date().toISOString()});setBusy(false);if(error){notify(sqlError(error),'error');return;}lastUploadedGps.current=Date.now();sharingRef.current=true;setSharing(true);notify('Tu ubicación ahora es visible para tus compañeros de equipo.','success')}
  // Refresco incluso si el móvil está quieto. No garantiza ejecución con navegador suspendido.
  useEffect(()=>{if(!sharing)return;const id=setInterval(()=>{if(current.current&&sharingRef.current)sendGPS(current.current)},8000);return()=>clearInterval(id)},[sharing,sendGPS]);
  async function toggleDiscoverable(){if(!profile)return;const next=!profile.discoverable;const {error}=await supabase.from('profiles').update({discoverable:next}).eq('id',user.id);if(error)notify(sqlError(error),'error');else{setProfile({...profile,discoverable:next});notify(next?'Aparecerás de forma aproximada en «Cercanos» mientras compartas GPS.':'Ya no aparecerás en la búsqueda de usuarios cercanos.','success')}}
