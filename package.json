@@ -16,7 +16,8 @@
     "test:phase531": "node tests/fase531-sanity.mjs",
     "test:phase54": "node tests/fase54-sanity.mjs",
     "test:phase55": "node tests/fase55-3d-sanity.mjs",
-    "test:phase56": "node tests/fase56-camera-sanity.mjs"
+    "test:phase56": "node tests/fase56-camera-sanity.mjs",
+    "test:phase57": "node tests/fase57-free-tier.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
