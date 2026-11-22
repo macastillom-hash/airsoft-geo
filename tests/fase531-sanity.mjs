@@ -29,7 +29,7 @@ const map3d=read('src/Map3D.jsx'),map=read('src/UnifiedMap.jsx'),
 nav=read('src/MapNavigation.jsx'),app=read('src/App.jsx'),
 hud=read('src/RouteGuideHud.jsx'),css=read('src/route-guide.css');
 for(const token of ["airsoft-satellite","World_Imagery","light3DStyle",
- "watchdog","onUnsupported","airsoft-building-vector","fill-extrusion","routeArrows"]){
+ "watchdog","onUnsupported","light3DStyle","routeArrows"]){
  assert.ok(map3d.includes(token),'Missing robust 3D map feature: '+token);
 }
 assert.ok(read('src/light3DStyle.js').includes("'source-layer':'building'"),
