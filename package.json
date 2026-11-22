@@ -1,6 +1,6 @@
 {
   "name": "airsoft-geo",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "test:phase3": "node tests/fase3-sanity.mjs",
     "test:phase4": "node tests/fase4-sanity.mjs",
     "test:phase5": "node tests/fase5-sanity.mjs",
-    "test:phase52": "node tests/fase52-sanity.mjs"
+    "test:phase52": "node tests/fase52-sanity.mjs",
+    "test:phase53": "node tests/fase53-sanity.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
@@ -19,7 +20,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-leaflet": "^5.0.0",
-    "lucide-react": "^0.468.0"
+    "lucide-react": "^0.468.0",
+    "maplibre-gl": "^6.19.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.7.0",
