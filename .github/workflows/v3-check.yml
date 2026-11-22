@@ -44,6 +44,8 @@ jobs:
         run: npm run test:phase56
       - name: Check V5.7 free-tier media optimization
         run: npm run test:phase57
+      - name: Check V5.9 lightweight mobile 3D performance protections
+        run: npm run test:phase59
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke
