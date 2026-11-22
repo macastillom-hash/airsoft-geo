@@ -10,6 +10,7 @@ import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import {calculateWalkingRoute} from './routeService';
 import RouteGuideHud from './RouteGuideHud';
+import TurnNavigationHud from './TurnNavigationHud';
 const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
  React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
 }})));
@@ -107,13 +108,14 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
  const [route,setRoute]=useState(null),[routeStatus,setRouteStatus]=useState('idle'),[routeError,setRouteError]=useState('');
+ const [navigationActive,setNavigationActive]=useState(false);
  const routeAbort=useRef(null),[selected3DPerson,setSelected3DPerson]=useState(null);
  const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
  const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
  useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
- function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
+ function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setNavigationActive(false);setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
  useEffect(()=>{chooseDestination(null);setSelected3DPerson(null)},[team?.id]);
  useEffect(()=>()=>routeAbort.current?.abort(),[]);
  async function planRoute(){
@@ -133,7 +135,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    if(routeAbort.current!==controller)return;
    if(controller.signal.aborted){setRouteError('No se pudo calcular la ruta a tiempo.');}
    else setRouteError('No se pudo obtener un recorrido peatonal de la zona.');
-   setRouteStatus('error');
+   setRouteStatus('error');setNavigationActive(false);
   }finally{clearTimeout(timeout);if(routeAbort.current===controller)routeAbort.current=null}
  }
  function fallback3D(reason){setMapStyle('street');notify(reason||'Vista 3D no disponible; mapa 2D restaurado.','error')}
@@ -204,7 +206,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {mapStyle==='3d'?
     <Map3DBoundary onFailure={fallback3D}><Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
      <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
-      objectives={objectives} signals={activeSignals} destination={destination} route={route}
+      objectives={objectives} signals={activeSignals} destination={destination} route={route} navigationActive={navigationActive}
       showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
       onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
       onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
@@ -234,13 +236,21 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
    </MapContainer>}
-   <RouteGuideHud me={me} route={route}/>
+   {navigationActive?<TurnNavigationHud me={me} route={route} active={navigationActive}
+    onStop={()=>{setNavigationActive(false);setFollow(false)}}
+    onRecalculate={planRoute} online={connection?.state!=='offline'}/>:
+    <RouteGuideHud me={me} route={route}/>}
    <NavigationControls me={me} destination={destination} onDestination={chooseDestination}
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
     routeError={routeError} onCalculateRoute={planRoute}
-    onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
+    navigationActive={navigationActive}
+    onStartNavigation={()=>{if(route?.points?.length&&me?.observedAt&&Date.now()-me.observedAt<=30000){
+      setNavigationActive(true);setFollow(true);setFocus(v=>v+1);
+     }else notify('Necesitas una ruta calculada y GPS reciente para iniciar la navegación.','error')}}
+    onStopNavigation={()=>{setNavigationActive(false);setFollow(false)}}
+    onClearRoute={()=>{routeAbort.current?.abort();setNavigationActive(false);setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
    {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
     <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
     <PlayerCard person={selected3DPerson.kind==='mine'?meProfile:selected3DPerson.person}
