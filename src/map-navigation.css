@@ -13,3 +13,12 @@
 .v52-nav-panel:has(.v53-route-summary){max-height:68vh}
 .v52-nav-title strong{overflow:hidden;text-overflow:ellipsis}
 @media(max-width:690px){.v52-nav-view button span{font-size:10px}.v53-route-summary{font-size:10px}.v52-nav-panel{max-height:58vh}}
+
+
+/* V5.4 recálculo solo si el usuario lo activa expresamente */
+.v55-reroute-toggle{display:flex;gap:9px;align-items:flex-start;margin-top:8px;padding:9px;border-radius:9px;border:1px solid #bcd4e6;background:#edf6fd;cursor:pointer}
+.v55-reroute-toggle input{flex:none;accent-color:#1375bc;width:17px;height:17px;margin:1px 0 0}
+.v55-reroute-toggle span{display:flex;flex-direction:column;gap:4px;min-width:0}
+.v55-reroute-toggle strong{font-size:11px;color:#1c557b}
+.v55-reroute-toggle small{font-size:10px;line-height:1.4;color:#53758c}
+@media(max-width:690px){.v55-reroute-toggle{padding:7px}.v55-reroute-toggle strong{font-size:10px}.v55-reroute-toggle small{font-size:9px}}
