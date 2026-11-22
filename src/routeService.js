@@ -46,6 +46,20 @@ export async function calculateWalkingRoute(from,dest,signal){
   durationSeconds:Number.isFinite(seconds)&&seconds>=0?Math.round(seconds):null,
   steps:(Array.isArray(leg?.maneuvers)?leg.maneuvers:[]).slice(0,15)
    .map(x=>String(x?.instruction||'').trim()).filter(Boolean),
+  // Instrucciones con índices exactos de la polilínea: permite calcular la
+  // distancia al próximo giro usando GPS en lugar de avanzar por temporizador.
+  maneuvers:(Array.isArray(leg?.maneuvers)?leg.maneuvers:[]).slice(0,160)
+   .map(m=>({
+    begin_shape_index:Number(m?.begin_shape_index),
+    end_shape_index:Number(m?.end_shape_index),
+    type:Number(m?.type),
+    instruction:String(m?.instruction||'').slice(0,220).trim(),
+    verbal_pre_transition_instruction:String(m?.verbal_pre_transition_instruction||'').slice(0,220).trim()
+   }))
+   .filter(m=>Number.isInteger(m.begin_shape_index)&&
+    m.begin_shape_index>=0&&m.begin_shape_index<points.length&&
+    m.instruction.length>0)
+   .sort((a,b)=>a.begin_shape_index-b.begin_shape_index),
   origin:{lat:from.lat,lng:from.lng},
   calculatedAt:Date.now(),provider:'Valhalla / OpenStreetMap'};
 }
