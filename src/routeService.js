@@ -45,7 +45,16 @@ export async function calculateWalkingRoute(from,dest,signal){
  return {points,distanceM:Number.isFinite(distanceKm)&&distanceKm>=0?Math.round(distanceKm*1000):null,
   durationSeconds:Number.isFinite(seconds)&&seconds>=0?Math.round(seconds):null,
   steps:(Array.isArray(leg?.maneuvers)?leg.maneuvers:[]).slice(0,15)
-   .map(x=>String(x?.instruction||'').trim()).filter(Boolean),
+   .map(x=>String(x?.instruction||'').trim().slice(0,260)).filter(Boolean),
+  maneuvers:(Array.isArray(leg?.maneuvers)?leg.maneuvers:[]).slice(0,100)
+   .filter(m=>Number.isInteger(m?.begin_shape_index)&&m.begin_shape_index>=0&&m.begin_shape_index<points.length)
+   .map(m=>({
+    type:Number.isInteger(m.type)?m.type:0,
+    beginShapeIndex:m.begin_shape_index,
+    endShapeIndex:Number.isInteger(m.end_shape_index)?m.end_shape_index:m.begin_shape_index,
+    instruction:String(m.instruction||'').trim().slice(0,260),
+    verbal:String(m.verbal_pre_transition_instruction||m.instruction||'').trim().slice(0,260)
+   })),
   origin:{lat:from.lat,lng:from.lng},
   calculatedAt:Date.now(),provider:'Valhalla / OpenStreetMap'};
 }

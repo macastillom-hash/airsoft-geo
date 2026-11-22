@@ -58,6 +58,7 @@ export function routeGuidance(me,route){
   Math.abs(turn)<=30?'Continúa de frente':turn>0?'Orienta tu marcha a la derecha':'Orienta tu marcha a la izquierda';
  return {bearing,relativeTurn:turn,headingAvailable:heading!==null,direction:bearingLabel(bearing),
   remainingMeters:Math.round(remaining),offRoute,arrived,instruction,
+  progressIndex:nearest.index+nearest.t,nearestSegment:nearest.index,nearestFraction:nearest.t,
   routeDeviationMeters:Math.round(nearest.offset),lookahead:goal};
 }
 export function routeArrows(points,spacing=85,maxArrows=35){
