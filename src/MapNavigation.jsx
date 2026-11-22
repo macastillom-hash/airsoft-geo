@@ -78,7 +78,7 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
- onCalculateRoute,onClearRoute}){
+ onCalculateRoute,onClearRoute,autoReroute,onToggleAutoReroute}){
  const [expanded,setExpanded]=useState(false);
  useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
@@ -132,6 +132,10 @@ export default function NavigationControls({me,destination,onDestination,objecti
     {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>
   </div>}
+  {routeReady&&<label className="v55-reroute-toggle"><input type="checkbox" checked={!!autoReroute}
+   onChange={e=>onToggleAutoReroute(e.target.checked)} aria-label="Recalcular automáticamente al desviarme"/>
+   <span><strong>Recálculo automático (opcional)</strong><small>Si te desvías claramente y el GPS tiene buena precisión, consulta otra ruta a pie. Cada consulta envía tu posición y el destino a Valhalla/OpenStreetMap; máximo un intento cada 2 minutos.</small></span>
+  </label>}
   {routeReady&&<div className="v53-route-summary"><strong>Ruta a pie:</strong> {route.distanceM===null?'—':distanceLabel(route.distanceM)} · {route.durationSeconds===null?'—':Math.max(1,Math.round(route.durationSeconds/60))+' min aproximados'}
     {route.steps.length>0&&<details><summary>Ver indicaciones ({route.steps.length})</summary><ol>{route.steps.map((step,i)=><li key={i}>{step}</li>)}</ol></details>}
    </div>}
