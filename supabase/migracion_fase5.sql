@@ -55,13 +55,13 @@ ALTER TABLE public.team_members
  ADD COLUMN IF NOT EXISTS operational_role_id uuid;
 ALTER TABLE public.team_members
  ADD CONSTRAINT f5_member_role_same_team FOREIGN KEY(team_id,operational_role_id)
- REFERENCES public.team_roles(team_id,id) ON DELETE SET NULL;
+ REFERENCES public.team_roles(team_id,id) ON DELETE SET NULL (operational_role_id);
 
 ALTER TABLE public.activity_participants
  ADD COLUMN IF NOT EXISTS operational_role_id uuid;
 ALTER TABLE public.activity_participants
  ADD CONSTRAINT f5_participant_role_same_team FOREIGN KEY(team_id,operational_role_id)
- REFERENCES public.team_roles(team_id,id) ON DELETE SET NULL;
+ REFERENCES public.team_roles(team_id,id) ON DELETE SET NULL (operational_role_id);
 
 -- Los propietarios definen y asignan roles. No se concede UPDATE directo sobre team_members.
 CREATE OR REPLACE FUNCTION public.f5_assign_team_roles(
