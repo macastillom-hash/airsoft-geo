@@ -7,9 +7,9 @@ const nav=read('src/MapNavigation.jsx');
 const css=read('src/map3d.css');
 assert.ok(shell.includes("const [mapStyle,setMapStyle]=useState('street')"),
  'El mapa 2D debe seguir siendo la vista predeterminada.');
-assert.ok(map3d.includes("style:streetStyle") &&
- map3d.includes("https://tiles.openfreemap.org/styles/liberty"),
- 'El 3D debe usar calles vectoriales gratuitas como base.');
+assert.ok(map3d.includes("style:light3DStyle") &&
+ read('src/light3DStyle.js').includes("https://tiles.openfreemap.org/planet"),
+ 'El 3D debe usar estilo mínimo gratuito de una fuente.');
 assert.ok(!map3d.includes("style:baseStyle")&&
  !map3d.includes("sourceDataType!=='content'"),
  'El 3D ya no debe depender de la detección del antiguo satélite obligatorio.');
@@ -29,7 +29,7 @@ assert.ok(map3d.includes("if(terrainEnabled){") &&
  map3d.includes("current.setTerrain(null);"),
  'El relieve debe poder desactivarse.');
 assert.ok(css.includes('.v56-3d-tools'));
-assert.ok(map3d.includes("routeArrows(route.points,85,32)") &&
+assert.ok(map3d.includes("routeArrows(route.points,120,16)") &&
  map3d.includes("if(showTeammates)teammates.forEach") &&
  map3d.includes("onUnsupported('Se perdió la aceleración gráfica."),
  'Rutas, compañeros y recuperación WebGL deben conservarse.');
