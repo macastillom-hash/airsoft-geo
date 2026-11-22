@@ -83,6 +83,7 @@ function Dashboard({user,notify}){
  const loadNearby=useCallback(async()=>{if(!current.current||!showNearby)return;const {data,error}=await supabase.rpc('nearby_people',{my_lat:current.current.lat,my_lng:current.current.lng});if(!error)setNearby(data||[])},[showNearby]);
  useEffect(()=>{supabase.from('profiles').select('*').eq('id',user.id).single().then(({data,error})=>{if(error)notify(sqlError(error),'error');else setProfile(data)});refreshTeams();},[user.id,refreshTeams]);
  useEffect(()=>{teamRef.current=selectedTeam;loadRoster();},[selectedTeam,loadRoster]);
+ useEffect(()=>{if(tab==='map')loadRoster()},[tab,loadRoster]);
  useEffect(()=>{loadPositions();const ch=supabase.channel('team-positions').on('postgres_changes',{event:'*',schema:'public',table:'positions'},()=>loadPositions()).subscribe();const id=setInterval(()=>{loadPositions();loadNearby()},tab==='map'?8000:15000);return()=>{clearInterval(id);supabase.removeChannel(ch)}},[loadPositions,loadNearby,tab]);
  useEffect(()=>{loadNearby()},[me?.lat,me?.lng,showNearby]);
  // La lectura local NO transmite GPS. Solo se transmite al activar el control explícito.
