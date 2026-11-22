@@ -9,7 +9,15 @@ import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import {calculateWalkingRoute} from './routeService';
-const Map3D=lazy(()=>import('./Map3D'));
+const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
+ React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
+}})));
+class Map3DBoundary extends React.Component{
+ constructor(props){super(props);this.state={failed:false}}
+ static getDerivedStateFromError(){return {failed:true}}
+ componentDidCatch(error){console.error('Vista 3D no disponible:',error);this.props.onFailure('El navegador no pudo dibujar 3D. Se restauró el mapa 2D.')}
+ render(){return this.state.failed?null:this.props.children}
+}
 import './unified-map.css';
 
 export const quickSignals=[
@@ -104,7 +112,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
- function chooseDestination(next){routeAbort.current?.abort();setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
+ function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
  useEffect(()=>{chooseDestination(null);setSelected3DPerson(null)},[team?.id]);
  useEffect(()=>()=>routeAbort.current?.abort(),[]);
  async function planRoute(){
@@ -121,6 +129,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    setRoute(result);setRouteStatus('ready');
    notify('Ruta peatonal calculada dentro de Airsoft Geo. Verifica la seguridad y acceso de los caminos.','success');
   }catch(error){
+   if(routeAbort.current!==controller)return;
    if(controller.signal.aborted){setRouteError('No se pudo calcular la ruta a tiempo.');}
    else setRouteError('No se pudo obtener un recorrido peatonal de la zona.');
    setRouteStatus('error');
@@ -192,13 +201,13 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
   </div>
   <div className="v5-map-shell" ref={shell}>
    {mapStyle==='3d'?
-    <Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
+    <Map3DBoundary onFailure={fallback3D}><Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
      <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
       objectives={objectives} signals={activeSignals} destination={destination} route={route}
       showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
       onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
       onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
-    </Suspense>:
+    </Suspense></Map3DBoundary>:
     <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
     {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
      <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
