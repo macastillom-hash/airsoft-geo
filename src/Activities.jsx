@@ -4,6 +4,7 @@ import L from 'leaflet';
 import {CalendarDays,MapPin,Users,Flag,ShieldCheck,Plus,RefreshCw,Check,Trash2,Edit3,Play,Square,AlertTriangle,MessagesSquare,Navigation,Radio,UserCheck} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
+import ActivityTimer from './ActivityTimer';
 import './activities.css';
 
 const modes={coordination:'Coordinación',stealth:'Sigilo',intelligence:'Inteligencia',direct_elimination:'Eliminación virtual',capture_flag:'Captura de bandera'};
@@ -26,7 +27,7 @@ function ActivityMap({me,allies,zones,sharing}){
   {allies.map(p=><Marker key={p.user_id} position={[p.latitude,p.longitude]} icon={friendIcon}><Popup>{p.display_name}<br/>Compañero · {me?distanceLabel(metersBetween(me,{lat:p.latitude,lng:p.longitude})):'—'}</Popup></Marker>)}
  </MapContainer><div className="act-map-caption">Marcadores: azul, tú; verde, compañeros autorizados; naranja, bases. No se transmiten posiciones de rivales desde este módulo.</div></div>;
 }
-export default function Activities({user,teams,me,sharing,positions,alias,notify,onOpenChat,onToggleSharing}){
+export default function Activities({user,teams,me,sharing,positions,alias,notify,onOpenChat,onToggleSharing,connection}){
  const [activities,setActivities]=useState([]),[selectedId,setSelectedId]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false);
  const [activityTeams,setActivityTeams]=useState([]),[participants,setParticipants]=useState([]),[zones,setZones]=useState([]),[flags,setFlags]=useState([]),[eliminations,setEliminations]=useState([]),[events,setEvents]=useState([]),[roleDefs,setRoleDefs]=useState([]);
  const [showForm,setShowForm]=useState(false),[editId,setEditId]=useState(''),[form,setForm]=useState(blankActivity),[createTeam,setCreateTeam]=useState('');
@@ -76,7 +77,8 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
   return()=>{clearInterval(id);supabase.removeChannel(channel)};
  },[selectedId,loadActivities,loadDetails]);
  const refresh=async()=>{await Promise.all([loadActivities(),loadDetails()])};
- async function run(action,success){setBusy(true);try{await action();if(success)notify(success,'success');await refresh()}catch(e){notify(err(e),'error')}finally{setBusy(false)}}
+ useEffect(()=>{if(connection?.reconnectedAt){loadActivities();loadDetails()}},[connection?.reconnectedAt,loadActivities,loadDetails]);
+ async function run(action,success){if(connection?.state==='offline'){notify('SIN CONEXIÓN: no se guardó el cambio. Vuelve a intentarlo cuando se restablezca Internet.','error');return}setBusy(true);try{await action();if(success)notify(success,'success');await refresh()}catch(e){notify('No se confirmó el cambio: '+err(e),'error')}finally{setBusy(false)}}
  function requireOk(result){if(result.error)throw result.error;return result.data}
  function newActivity(){setEditId('');setForm({...blankActivity});setCreateTeam(myOwners[0]?.id||'');setShowForm(true)}
  function editActivity(){if(!canConfigure)return;setEditId(activity.id);setForm({title:activity.title,description:activity.description,mode:activity.mode,duration_minutes:activity.duration_minutes,respawn_seconds:activity.respawn_seconds||0,starts_at:localInputTime(activity.starts_at)});setShowForm(true)}
@@ -149,6 +151,7 @@ export default function Activities({user,teams,me,sharing,positions,alias,notify
     </>}{isOrganizer&&<span className="act-code">Código: <code>{activity.invite_code}</code></span>}
     </div>
    </section>
+   <ActivityTimer activity={activity} isOrganizer={isOrganizer} connection={connection} refresh={refresh} notify={notify}/>
    <section className="tile"><h3><Users size={18}/> Equipos y participantes</h3><div className="act-team-grid">{sortedTeams.map(t=><div className="act-team" key={t.team_id}><div className="act-team-title"><strong>{t.team?.name||'Equipo '+t.side}</strong><span>Equipo {t.side==='alpha'?'A':'B'}</span></div><div className="act-stats"><b>{participants.filter(p=>p.team_id===t.team_id&&p.status==='active').length}</b> activos <b>{t.score}</b> puntos</div>{canConfigure&&<button className="act-small-button" disabled={busy} onClick={()=>removeTeam(t.team_id)}><Trash2 size={14}/> Retirar equipo</button>}</div>)}</div>
     {!myParticipant&&['draft','scheduled','active'].includes(activity.status)?<div className="act-inline"><select value={joinTeam} onChange={e=>setJoinTeam(e.target.value)}><option value="">Mi equipo en esta actividad…</option>{myAssignedTeams.map(t=><option value={t.id} key={t.id}>{t.name}</option>)}</select><button className="btn primary" disabled={busy||!joinTeam} onClick={enroll}><UserCheck size={16}/> Inscribirme</button></div>:myParticipant?<div className="act-inline"><span>Participas como <strong>{myParticipant.display_name}</strong> · {myParticipant.status}</span>{myParticipant.status!=='withdrawn'&&<button className="btn outline" disabled={busy} onClick={leave}>Abandonar</button>}</div>:null}
     <div className="act-roster">{participants.map(p=><div key={p.user_id} className="act-person"><span>{p.display_name} {p.user_id===user.id?'(tú)':''}</span><small>{p.status==='active'?'Activo':p.status==='eliminated'?'Eliminado virtualmente':'Retirado'} · {p.team_id===myTeamId?'Aliado':p.team_id===activityTeams.find(t=>t.side==='alpha')?.team_id?'Equipo A':'Equipo B'}{p.operational_role_id?' · '+(roleDefs.find(r=>r.id===p.operational_role_id)?.name||'Rol'):''}</small>{isOrganizer&&['draft','scheduled','active'].includes(activity.status)&&<select aria-label={'Rol operativo de '+p.display_name} value={p.operational_role_id||''} disabled={busy} onChange={e=>assignActivityRole(p,e.target.value)}><option value="">Sin rol en la actividad</option>{roleDefs.filter(r=>r.team_id===p.team_id).map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select>}{isOrganizer&&isActive&&p.status==='eliminated'&&<button className="act-small-button" onClick={()=>organizerAction('reinstate',p.user_id)} disabled={busy}>Reincorporar</button>}</div>)}</div>
