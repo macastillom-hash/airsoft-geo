@@ -12,6 +12,7 @@ import {calculateWalkingRoute} from './routeService';
 import {routeGuidance} from './navigationGuide.js';
 import {reliableOffRouteFix,canRetryAutoRoute} from './reroutePolicy.js';
 import RouteGuideHud from './RouteGuideHud';
+const CameraNavigation=lazy(()=>import('./CameraNavigation.jsx'));
 const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
  React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
 }})));
@@ -112,11 +113,14 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const [autoReroute,setAutoReroute]=useState(false),rerouteTracker=useRef({lastFix:0,count:0,lastRequest:0});
  const routeAbort=useRef(null),[selected3DPerson,setSelected3DPerson]=useState(null);
  const [mapStyle,setMapStyle]=useState('street'),[follow,setFollow]=useState(false);
+ const [cameraOpen,setCameraOpen]=useState(false);
+ const openCamera=useCallback(()=>setCameraOpen(true),[]);
+ const closeCamera=useCallback(()=>setCameraOpen(false),[]);
  const shell=useRef(null),[fullscreen,setFullscreen]=useState(false);
  useEffect(()=>{const onChange=()=>setFullscreen(document.fullscreenElement===shell.current);document.addEventListener('fullscreenchange',onChange);return()=>document.removeEventListener('fullscreenchange',onChange)},[]);
  async function toggleFullscreen(){try{if(document.fullscreenElement===shell.current)await document.exitFullscreen();else if(shell.current?.requestFullscreen)await shell.current.requestFullscreen();else notify('Pantalla completa no disponible en este navegador. El mapa ya ocupa la mayor parte de la vista.','info');}catch(e){notify('Pantalla completa no disponible.','error')}}
  const {zones:objectives,error:objectiveError,reload:reloadObjectives}=useAuthorizedObjectives(team?.id,connection?.reconnectedAt,connection?.state!=='offline');
- function chooseDestination(next){routeAbort.current?.abort();routeAbort.current=null;setAutoReroute(false);rerouteTracker.current.count=0;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
+ function chooseDestination(next){setCameraOpen(false);routeAbort.current?.abort();routeAbort.current=null;setAutoReroute(false);rerouteTracker.current.count=0;setRoute(null);setRouteError('');setRouteStatus('idle');setDestination(next);setPicking(false);}
  useEffect(()=>{chooseDestination(null);setSelected3DPerson(null)},[team?.id]);
  useEffect(()=>()=>routeAbort.current?.abort(),[]);
  async function planRoute(){
@@ -265,7 +269,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
-    routeError={routeError} onCalculateRoute={planRoute} autoReroute={autoReroute}
+    routeError={routeError} onCalculateRoute={planRoute} onOpenCamera={openCamera} autoReroute={autoReroute}
     onToggleAutoReroute={setAutoReroute}
     onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
    {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
@@ -282,6 +286,9 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     <button type="button" onClick={onToggleDiscoverable}>{profile?.discoverable?'Ocultar de Cercanos':'Permitir que me encuentren'}</button>
     <button type="button" onClick={toggleFullscreen} aria-label="Salir de pantalla completa"><Minimize2 size={17}/></button>
    </div>}
+   {cameraOpen&&destination&&<Suspense fallback={<div className="v56-camera-starting">Cargando modo cámara…</div>}>
+    <CameraNavigation me={me} destination={destination} route={route} onClose={closeCamera}/>
+   </Suspense>}
    <div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
     {quickSignals.filter(q=>q.group==='rival').map(q=><QuickButton key={q.id} type={q.id}
       send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
