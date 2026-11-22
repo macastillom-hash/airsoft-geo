@@ -78,7 +78,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
     if(controls.current.picking)controls.current.onPick(event.lngLat.lat,event.lngLat.lng);
    });
    map.on('sourcedata',event=>{
-    if(!live||event.sourceDataType!=='content')return;
+    if(!live||!event.isSourceLoaded||!['content','idle'].includes(event.sourceDataType))return;
     if(event.sourceId==='airsoft-satellite'){
      satelliteReady=true;
      // La capa de calles está encima de satélite. Una carga tardía
