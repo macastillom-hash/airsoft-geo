@@ -1,0 +1,19 @@
+.v54-turn-panel{position:absolute;left:8px;top:68px;z-index:560;width:min(278px,calc(100% - 137px));max-height:58vh;overflow-y:auto;overscroll-behavior:contain;border:1px solid #b9d5e9;border-radius:13px;padding:10px;background:rgba(247,251,255,.97);box-shadow:0 4px 15px #0d304d60;color:#143a57;backdrop-filter:blur(11px)}
+.v54-turn-panel.offroute{background:#fff9ed;border-color:#e9b78e}
+.v54-turn-heading{display:flex;align-items:flex-start;gap:8px}
+.v54-turn-direction{width:39px;height:39px;flex:none;background:#1370c9;color:#fff;border-radius:11px;display:flex;align-items:center;justify-content:center}
+.v54-turn-panel.offroute .v54-turn-direction{background:#b35b17}
+.v54-turn-instruction{min-width:0;display:flex;flex-direction:column;gap:4px}
+.v54-turn-instruction strong{font-size:12px;line-height:1.35}
+.v54-turn-instruction small{font-size:10px;line-height:1.35;color:#627b8c}
+.v54-turn-progress{margin:9px 0 6px;padding:7px 6px;border:1px solid #d6e7f4;border-radius:8px;display:flex;gap:5px;justify-content:space-between;font-size:10px;font-weight:750;color:#24618d}
+.v54-turn-actions{display:flex;gap:5px;justify-content:space-between;margin-top:8px}
+.v54-turn-actions button,.v54-turn-recalculate{flex:1;cursor:pointer;border:1px solid #ccdfed;border-radius:8px;background:#fff;color:#225c80;padding:7px 5px;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:5px}
+.v54-turn-recalculate{width:100%;color:#8a4b17;background:#fff4df;border-color:#ebc08b}
+.v54-turn-actions button:disabled,.v54-turn-recalculate:disabled{opacity:.5;cursor:not-allowed}
+.v54-turn-caution{font-size:10px;color:#9d4f13;line-height:1.4;display:flex;gap:5px;align-items:flex-start}
+.v54-turn-caution svg{flex:none}
+.v54-turn-disclaimer{font-size:9px;color:#6f8294;line-height:1.35;margin:8px 0 0}
+.v54-nav-start{display:flex;gap:7px;align-items:center;justify-content:center;margin-top:7px;border-radius:8px;border:0;background:#0f7f67;color:white;padding:10px;font-size:11px;font-weight:800;width:100%;cursor:pointer}
+.v54-nav-start.end{background:#ad4b43}
+@media(max-width:620px){.v54-turn-panel{top:86px;width:min(205px,calc(100% - 135px));padding:7px;border-radius:10px}.v54-turn-direction{width:32px;height:32px}.v54-turn-instruction strong{font-size:10px}.v54-turn-progress{flex-direction:column;gap:4px}.v54-turn-actions button{font-size:9px;padding:6px 3px}.v54-turn-disclaimer{font-size:8px}}
