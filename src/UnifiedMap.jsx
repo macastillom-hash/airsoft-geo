@@ -189,6 +189,17 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
    </MapContainer>
+   <NavigationControls me={me} destination={destination} onDestination={d=>{setDestination(d);setPicking(false)}}
+    objectives={objectives} picking={picking} setPicking={setPicking}
+    mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
+    onRecenter={()=>setFocus(v=>v+1)} connection={connection}/>
+   {picking&&<div className="v52-map-press-hint">Toca un lugar del mapa para elegir tu destino.</div>}
+   {connection?.state==='offline'&&<div className="v52-map-offline"><WifiOff size={16}/> Sin conexión: avisos deshabilitados. Los puntos visibles pueden estar desactualizados.</div>}
+   {fullscreen&&<div className="v52-fullscreen-privacy">
+    <button type="button" onClick={onToggleSharing} disabled={busy}>{sharing?'Detener GPS':'Compartir GPS'}</button>
+    <button type="button" onClick={onToggleDiscoverable}>{profile?.discoverable?'Ocultar de Cercanos':'Permitir que me encuentren'}</button>
+    <button type="button" onClick={toggleFullscreen} aria-label="Salir de pantalla completa"><Minimize2 size={17}/></button>
+   </div>}
    <div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
     {quickSignals.filter(q=>q.group==='rival').map(q=><QuickButton key={q.id} type={q.id}
       send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
@@ -210,26 +221,21 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {showNear&&<span><i className="v5-legend-dot orange"/> Cercanos aproximados</span>}
    {showTeammates&&<span><i className="v5-legend-dot red"/> Avisos temporales</span>}
   </div>
-  <div className="v5-map-details">
-   <section className="tile"><h3><ShieldAlert size={17}/> Avisos rápidos</h3>
-    <p className="muted small">Los botones del mapa envían un aviso al equipo seleccionado. «Izquierda» y «derecha» son referencias informadas por ti; no indican la coordenada del rival. Duración del marcador: 3 minutos; apoyo y médico: 8 minutos.</p>
-    {!team&&<p className="small muted">Crea o selecciona un equipo para enviar avisos.</p>}
-    {activeSignals.length>0&&<div className="v5-alert-feed">
-     {activeSignals.slice(0,8).map(s=><div key={s.id} className="v5-alert-line">
-      <AlertTriangle size={15}/><div><b>{signalById[s.kind]?.label||'Aviso'}</b>
-       <small>{aliasFor(s.sender_id)} · {new Date(s.created_at).toLocaleTimeString('es-CO')}
-       {s.latitude===null?' · Sin GPS compartido':''}</small></div></div>)}
-    </div>}
-   </section>
-   <section className="tile"><h3><Eye size={17}/> Privacidad y conexiones</h3>
-    <p className="muted small">Consultar Cercanos no activa la publicación de tu ubicación. Para aparecer ante otros usuarios debes compartir GPS y autorizar expresamente que te encuentren.</p>
-    <div className="v5-privacy-buttons">
-     <button className={'btn '+(sharing?'danger':'primary')} disabled={busy} onClick={onToggleSharing}>
-      {sharing?<EyeOff size={16}/>:<Navigation size={16}/>} {sharing?'Dejar de compartir GPS':'Compartir GPS'}</button>
-     <button className="btn outline" onClick={onToggleDiscoverable}>
-      <Radio size={16}/>{profile?.discoverable?'Dejar de aparecer en Cercanos':'Permitir que me encuentren'}</button>
-    </div>
-   </section>
-  </div>
+  <details className="v52-map-extras">
+   <summary>Detalles, avisos y privacidad</summary>
+   <div className="v5-map-details">
+    <section className="tile"><h3><ShieldAlert size={17}/> Avisos recientes</h3>
+     <p className="muted small">Los avisos de rival indican la posición del informante, no la del rival. Caducan automáticamente.</p>
+     {activeSignals.length>0?<div className="v5-alert-feed">{activeSignals.slice(0,12).map(item=>
+      <div key={item.id} className="v5-alert-line"><AlertTriangle size={15}/><div>
+       <b>{signalById[item.kind]?.label||'Aviso'}</b><small>{aliasFor(item.sender_id)} · {new Date(item.created_at).toLocaleTimeString('es-CO')}</small>
+      </div></div>)}</div>:<p className="muted small">Sin avisos vigentes de tu equipo.</p>}
+    </section>
+    <section className="tile"><h3><Eye size={17}/> Información GPS</h3>
+     <p className="muted small">Compartir GPS y permitir que te encuentren son controles independientes, siempre accesibles en la parte superior del mapa. Un objetivo puede elegirse entre las zonas autorizadas o tocando el mapa.</p>
+     <p className="muted small">{objectiveError||'El mapa permite orientación directa y apertura voluntaria de indicaciones peatonales externas.'}</p>
+    </section>
+   </div>
+  </details>
  </div>;
 }
