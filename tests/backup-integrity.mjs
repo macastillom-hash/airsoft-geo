@@ -16,7 +16,7 @@ try{
  const local='objects/team-media/'+sha('team-media\0test/file.png')+'.bin';
  await writeFile(path.join(temp,local),bytes);
  const manifest={format:'airsoft-geo-storage-v1',created_at:new Date().toISOString(),
-  buckets:['team-media','direct-media'],files:[
+  buckets:['team-media','direct-media','profile-avatars'],files:[
    {bucket:'team-media',key:'test/file.png',local,bytes:bytes.length,sha256:sha(bytes)}
   ],total_objects:1,total_bytes:bytes.length};
  await writeFile(path.join(temp,'storage-manifest.json'),JSON.stringify(manifest));
