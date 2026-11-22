@@ -191,7 +191,15 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    <span><Users size={14}/> {visibleTeammates.length} compañeros recientes</span>
   </div>
   <div className="v5-map-shell" ref={shell}>
-   <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
+   {mapStyle==='3d'?
+    <Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
+     <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
+      objectives={objectives} signals={activeSignals} destination={destination} route={route}
+      showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
+      onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
+      onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
+    </Suspense>:
+    <MapContainer center={me?[me.lat,me.lng]:[4.65,-74.1]} zoom={me?16:6} className="v5-map-canvas" scrollWheelZoom={false}>
     {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
      <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
     <FollowCurrent me={me} focus={focus} follow={follow}/>
@@ -215,13 +223,20 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
      </Pin>)}
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
-   </MapContainer>
+   </MapContainer>}
    <NavigationControls me={me} destination={destination} onDestination={chooseDestination}
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
     routeError={routeError} onCalculateRoute={planRoute}
     onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
+   {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
+    <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
+    <PlayerCard person={selected3DPerson.kind==='mine'?meProfile:selected3DPerson.person}
+     type={selected3DPerson.kind} me={me} sharing={sharing} team={team} onSignal={sendSignal}
+     busy={sending} onOpenChat={onOpenChat}
+     onTestVibration={()=>notify(vibratePattern('team_alert')?'Se solicitó vibración.':'Vibración no disponible.','info')}/>
+   </div>}
    {picking&&<div className="v52-map-press-hint">Toca un lugar del mapa para elegir tu destino.</div>}
    {connection?.state==='offline'&&<div className="v52-map-offline"><WifiOff size={16}/> Sin conexión: avisos deshabilitados. Los puntos visibles pueden estar desactualizados.</div>}
    {fullscreen&&<div className="v52-fullscreen-privacy">
