@@ -8,7 +8,8 @@ export const light3DStyle={
  version:8,
  name:'Airsoft Geo 3D ligero',
  sources:{
-  'airsoft-vector':{type:'vector',url:LIGHT_3D_VECTOR_URL}
+  'airsoft-vector':{type:'vector',url:LIGHT_3D_VECTOR_URL,
+   attribution:'© OpenStreetMap contributors · OpenFreeMap'}
  },
  layers:[
   {id:'airsoft-background',type:'background',paint:{'background-color':'#e6e9e3'}},
