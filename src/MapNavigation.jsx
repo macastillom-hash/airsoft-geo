@@ -1,0 +1,152 @@
+import React,{useCallback,useEffect,useMemo,useState} from 'react';
+import {Marker,Popup,Circle,Polyline,useMapEvents} from 'react-leaflet';
+import L from 'leaflet';
+import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
+  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon} from 'lucide-react';
+import {supabase} from './supabase';
+import {metersBetween,distanceLabel} from './geo';
+import './map-navigation.css';
+
+export const validCoordinate=(lat,lng)=>Number.isFinite(lat)&&Number.isFinite(lng)&&
+ Math.abs(lat)<=90&&Math.abs(lng)<=180;
+export function headingTo(a,b){
+ if(!a||!b||!validCoordinate(a.lat,a.lng)||!validCoordinate(b.lat,b.lng))return null;
+ const radians=Math.PI/180;
+ const from=a.lat*radians,to=b.lat*radians,delta=(b.lng-a.lng)*radians;
+ const y=Math.sin(delta)*Math.cos(to);
+ const x=Math.cos(from)*Math.sin(to)-Math.sin(from)*Math.cos(to)*Math.cos(delta);
+ return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+export function bearingLabel(bearing){
+ if(!Number.isFinite(bearing))return '—';
+ return ['N','NE','E','SE','S','SO','O','NO'][Math.round(bearing/45)%8];
+}
+export function externalWalkingDirections(dest){
+ if(!dest||!validCoordinate(dest.lat,dest.lng))return '';
+ const point=String(dest.lat)+','+String(dest.lng);
+ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(point)+'&travelmode=walking';
+}
+const markerIcon=type=>L.divIcon({
+ className:'v52-destination-marker '+type,
+ html:'<span>'+ (type==='selected'?'★':'●') +'</span>',
+ iconSize:[34,34],iconAnchor:[17,17],popupAnchor:[0,-18]
+});
+function DestinationClick({picking,onPick}){
+ useMapEvents({click:e=>{if(picking)onPick(e.latlng.lat,e.latlng.lng)}});
+ return null;
+}
+export function NavigationLayers({objectives,destination,onChoose,me,picking,onPick}){
+ const destIcon=useMemo(()=>markerIcon('selected'),[]);
+ const zoneIcon=useMemo(()=>markerIcon('zone'),[]);
+ const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
+ const point=dest&&validCoordinate(dest.lat,dest.lng)?[dest.lat,dest.lng]:null;
+ return <>
+  <DestinationClick picking={picking} onPick={onPick}/>
+  {objectives.map(zone=><Marker key={zone.id} position={[zone.lat,zone.lng]} icon={zoneIcon}>
+   <Popup minWidth={180}><div className="v52-goal-popup"><strong>{zone.name}</strong>
+    <small>{zone.activityTitle} · {zone.type}</small>
+    <button type="button" className="v52-nav-button" onClick={()=>onChoose(zone)}>
+     <Target size={14}/> Elegir como destino</button>
+   </div></Popup>
+  </Marker>)}
+  {point&&<><Marker position={point} icon={destIcon}>
+   <Popup><strong>{destination.name}</strong><p className="v52-nav-hint">Destino seleccionado. Consulta el panel de orientación.</p></Popup>
+  </Marker>
+   {Number.isFinite(destination.radius_m)&&destination.radius_m>0&&
+     <Circle center={point} radius={destination.radius_m} pathOptions={{color:'#a86b08',weight:2,fillOpacity:0.04}}/>}
+   {fresh&&<Polyline positions={[[me.lat,me.lng],point]} pathOptions={{
+    color:'#e79421',dashArray:'7 8',weight:3,opacity:0.9
+   }}/>}
+  </>}
+ </>;
+}
+export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
+ const [zones,setZones]=useState([]),[error,setError]=useState('');
+ const reload=useCallback(async()=>{
+  if(!teamId||!online){if(!teamId)setZones([]);return;}
+  try{
+   const {data:activities,error:activityError}=await supabase.from('activities')
+    .select('id,title,status').in('status',['scheduled','active']).limit(100);
+   if(activityError)throw activityError;
+   const ids=(activities||[]).map(a=>a.id);
+   if(!ids.length){setZones([]);setError('');return;}
+   const {data,error:zoneError}=await supabase.from('activity_zones')
+    .select('id,activity_id,team_id,name,zone_type,latitude,longitude,radius_m')
+    .in('activity_id',ids).limit(200);
+   if(zoneError)throw zoneError;
+   const indexed=new Map((activities||[]).map(a=>[a.id,a]));
+   setZones((data||[]).filter(z=>validCoordinate(z.latitude,z.longitude)).map(z=>({
+    id:z.id,activity_id:z.activity_id,team_id:z.team_id,
+    name:z.name,type:z.zone_type,lat:z.latitude,lng:z.longitude,radius_m:z.radius_m,
+    activityTitle:indexed.get(z.activity_id)?.title||'Actividad'
+   })));
+   setError('');
+  }catch(e){setError('No se pudieron actualizar los objetivos. Revisa la conexión.')}
+ },[teamId,online]);
+ useEffect(()=>{reload();if(!online)return;const interval=setInterval(()=>{
+  if(document.visibilityState==='visible')reload();
+ },30000);return()=>clearInterval(interval)},[reload,online,reconnectedAt]);
+ return {zones,error,reload};
+}
+export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
+ mapStyle,setMapStyle,follow,setFollow,onRecenter,connection}){
+ const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
+ const distance=fresh&&destination?metersBetween(me,destination):null;
+ const bearing=fresh&&destination?headingTo(me,destination):null;
+ const navigationUrl=externalWalkingDirections(destination);
+ const chooseZone=event=>{
+  const zone=objectives.find(z=>z.id===event.target.value);
+  if(zone)onDestination(zone);
+ };
+ const selectedId=objectives.some(z=>z.id===destination?.id)?destination.id:'';
+ function openDirections(){
+  if(!navigationUrl||connection?.state==='offline')return;
+  // La salida a Maps es una acción explícita; no se envían coordenadas
+  // de terceros ni posiciones de miembros de equipo.
+  window.open(navigationUrl,'_blank','noopener,noreferrer');
+ }
+ async function copyCoords(){
+  if(!destination)return;
+  try{await navigator.clipboard.writeText(destination.lat.toFixed(6)+', '+destination.lng.toFixed(6))}
+  catch{/* La selección textual también permite copiar la coordenada manualmente. */}
+ }
+ return <div className="v52-nav-panel">
+  <div className="v52-nav-top">
+   <div className="v52-nav-title"><Target size={17}/><strong>Navegar a un objetivo</strong></div>
+   <div className="v52-nav-view">
+    <button type="button" className={mapStyle==='street'?'active':''} onClick={()=>setMapStyle('street')}
+     title="Mapa de calles" aria-label="Ver calles"><MapIcon size={16}/></button>
+    <button type="button" className={mapStyle==='satellite'?'active':''} onClick={()=>setMapStyle('satellite')}
+     title="Vista satélite" aria-label="Ver satélite"><Satellite size={16}/></button>
+   </div>
+  </div>
+  <div className="v52-nav-selector">
+   <select aria-label="Objetivos de las actividades" value={selectedId} onChange={chooseZone}>
+    <option value="">Selecciona un objetivo autorizado</option>
+    {objectives.map(zone=><option key={zone.id} value={zone.id}>{zone.name} · {zone.activityTitle}</option>)}
+   </select>
+   <button type="button" className={picking?'active':''} onClick={()=>setPicking(v=>!v)}
+    title="Toca en el mapa para fijar un destino temporal"><MousePointer2 size={16}/> {picking?'Toca mapa…':'Elegir en mapa'}</button>
+  </div>
+  {destination&&<div className="v52-destination-line">
+   <div><strong><Flag size={14}/> {destination.name}</strong>
+    <small>{fresh?(distanceLabel(distance)+' · '+bearingLabel(bearing)+' ('+Math.round(bearing)+'°)'):'GPS reciente necesario para distancia y orientación'}</small>
+    <small className="v52-coordinate">{destination.lat.toFixed(6)}, {destination.lng.toFixed(6)}</small>
+   </div>
+   <div className="v52-destination-buttons">
+    <button type="button" title="Copiar coordenadas" aria-label="Copiar coordenadas" onClick={copyCoords}><Copy size={15}/></button>
+    <button type="button" title="Limpiar destino" aria-label="Limpiar destino" onClick={()=>onDestination(null)}><X size={16}/></button>
+    <button type="button" className="v52-navigate-external" onClick={openDirections}
+     disabled={!navigationUrl||connection?.state==='offline'} title="Abrir ruta peatonal en Google Maps">
+     <Route size={15}/> Cómo llegar
+    </button>
+   </div>
+  </div>}
+  <div className="v52-nav-secondary">
+   <button type="button" onClick={()=>{setFollow(v=>!v);if(!follow)onRecenter()}}>
+    <LocateFixed size={15}/> {follow?'Seguirme: sí':'Seguirme: no'}</button>
+   <button type="button" onClick={onRecenter}><Navigation size={15}/> Centrar</button>
+  </div>
+  <p className="v52-nav-hint">La línea punteada indica distancia directa, no un sendero. «Cómo llegar» abre un proveedor externo de rutas a pie y comparte el destino seleccionado.</p>
+ </div>;
+}
