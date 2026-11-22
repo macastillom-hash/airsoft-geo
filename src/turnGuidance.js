@@ -16,9 +16,10 @@ export function routeDistanceToIndex(points,progress,target){
  return Math.max(0,Math.round(result));
 }
 export function turnKind(type){
- if([9,10,11,12,18,19,20,24,26].includes(type))return 'right';
- if([13,14,15,16,21,22,23,25,27].includes(type))return 'left';
  if([4,5,6].includes(type))return 'arrival';
+ // Según la clasificación oficial de maniobras Valhalla.
+ if([2,9,10,11,12,18,20,23,37].includes(type))return 'right';
+ if([3,13,14,15,16,19,21,24,38].includes(type))return 'left';
  return 'straight';
 }
 export function nextTurn(me,route){
