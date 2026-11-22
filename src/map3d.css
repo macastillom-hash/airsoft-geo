@@ -24,3 +24,9 @@
 .v53-3d-info{top:219px;max-width:min(280px,calc(100% - 132px))}
 .v56-3d-tools button[aria-pressed="true"]{background:#d7f1e6;border-color:#69ad92;color:#15583f}
 @media(max-width:600px){.v53-3d-info{top:211px;left:8px;max-width:calc(100% - 130px);font-size:10px}.v56-3d-tools{top:152px}}
+
+/* V5.9: controles compactos, sin tapar panel de estado en pantallas pequeñas. */
+.v56-3d-tools{max-width:calc(100% - 112px);row-gap:5px}
+.v56-3d-tools button{min-height:29px}
+.v53-3d-info{top:250px}
+@media(max-width:600px){.v56-3d-tools{max-width:calc(100% - 117px);top:148px}.v53-3d-info{top:258px}}
