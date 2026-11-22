@@ -34,6 +34,8 @@ jobs:
         run: npm run test:phase52
       - name: Check V5.3 internal navigation and 3D fallback
         run: npm run test:phase53
+      - name: Check V5.3.1 satellite 3D and navigation arrows
+        run: npm run test:phase531
       - name: Build production bundle
         run: npm run build
       - name: Install browser runtime for mobile smoke
