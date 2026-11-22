@@ -116,6 +116,9 @@ try{
    await voiceButton.click();
    assert.equal(await page.getByRole('button',{name:/Voz activada/}).getAttribute('aria-pressed'),'true',
     'Voice must activate only via user gesture');
+   const repeatButton=page.getByRole('button',{name:/Repetir indicación/});
+   assert.ok(await repeatButton.isVisible(),'A user must be able to replay the current turn');
+   await repeatButton.click();
   }
   const serious=errors.filter(e=>/ReferenceError|TypeError|SyntaxError|React error/.test(e));
   assert.equal(serious.length,0,'Turn guide browser errors: '+serious.join('\n'));
