@@ -40,12 +40,24 @@ export async function calculateWalkingRoute(from,dest,signal){
  const leg=data?.trip?.legs?.[0];
  if(!leg?.shape)throw Error('No se encontró una ruta peatonal para ese destino.');
  const points=decodePolyline6(leg.shape);
+ // Conservar los índices de la geometría: son esenciales para mostrar el giro
+ // cuando el usuario se acerca a la maniobra, no solo una lista estática.
+ const maneuvers=(Array.isArray(leg.maneuvers)?leg.maneuvers:[]).slice(0,150)
+  .map((m,i)=>({
+   id:i,
+   type:Number.isInteger(m.type)?m.type:0,
+   beginIndex:Number.isInteger(m.begin_shape_index)?Math.max(0,Math.min(points.length-1,m.begin_shape_index)):null,
+   endIndex:Number.isInteger(m.end_shape_index)?Math.max(0,Math.min(points.length-1,m.end_shape_index)):null,
+   instruction:String(m.instruction||'').slice(0,280).trim(),
+   spokenInstruction:String(m.verbal_pre_transition_instruction||m.verbal_transition_alert_instruction||m.instruction||'').slice(0,280).trim(),
+   lengthKm:Number.isFinite(m.length)?Math.max(0,m.length):null
+  })).filter(m=>m.beginIndex!==null&&m.instruction);
  const distanceKm=Number(data?.trip?.summary?.length);
  const seconds=Number(data?.trip?.summary?.time);
  return {points,distanceM:Number.isFinite(distanceKm)&&distanceKm>=0?Math.round(distanceKm*1000):null,
   durationSeconds:Number.isFinite(seconds)&&seconds>=0?Math.round(seconds):null,
-  steps:(Array.isArray(leg?.maneuvers)?leg.maneuvers:[]).slice(0,15)
-   .map(x=>String(x?.instruction||'').trim()).filter(Boolean),
+  maneuvers,
+  steps:maneuvers.slice(0,15).map(x=>x.instruction),
   origin:{lat:from.lat,lng:from.lng},
   calculatedAt:Date.now(),provider:'Valhalla / OpenStreetMap'};
 }
