@@ -89,6 +89,8 @@ for(const value of ['autoReroute','reliableOffRouteFix','canRetryAutoRoute',
 assert.ok(nav.includes('Recalcular automáticamente al desviarme'));
 assert.ok(nav.includes('onCalculateRoute')&&!nav.includes('window.open('));
 assert.ok(hud.includes('speechSynthesis')&&hud.includes('onClick={toggleVoice}'));
+assert.ok(hud.includes("document.addEventListener('visibilitychange',stopWhenHidden)"),'Voice must stop if app becomes hidden');
+assert.ok(hud.includes('onClick={repeatInstruction}'),'Voice replay must require a user click');
 assert.ok(hud.includes("document.visibilityState!=='visible'"),'Do not speak on background');
 assert.ok(hud.includes("(Number(me.accuracy)||0)>35"),'Do not speak on imprecise GPS');
 assert.ok(css.includes('.v55-voice-toggle'));

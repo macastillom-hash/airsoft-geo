@@ -33,7 +33,16 @@ export default function RouteGuideHud({me,route}){
   }catch{setVoice(false)}
  },[voice,me?.observedAt,me?.accuracy,guide?.maneuverIndex,guide?.metersToManeuver,guide?.offRoute,
   route?.calculatedAt,fresh]);
- useEffect(()=>()=>{if(speechSupported())window.speechSynthesis.cancel()},[]);
+ useEffect(()=>{
+  const stopWhenHidden=()=>{
+   if(document.visibilityState!=='visible'&&speechSupported())window.speechSynthesis.cancel();
+  };
+  document.addEventListener('visibilitychange',stopWhenHidden);
+  return()=>{
+   document.removeEventListener('visibilitychange',stopWhenHidden);
+   if(speechSupported())window.speechSynthesis.cancel();
+  };
+ },[]);
  function toggleVoice(){
   if(!speechSupported())return;
   if(voice){setVoice(false);window.speechSynthesis.cancel();return}
@@ -45,6 +54,18 @@ export default function RouteGuideHud({me,route}){
    window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
    lastVoice.current=Date.now();setVoice(true);
   }catch{setVoice(false)}
+ }
+ function repeatInstruction(){
+  if(!speechSupported()||!fresh||!guide)return;
+  const spoken=guide.maneuver?
+   announceTurn(guide,Number.isFinite(guide.metersToManeuver)?guide.metersToManeuver:0):
+   guide.instruction;
+  if(!spoken)return;
+  try{
+   const utterance=new SpeechSynthesisUtterance(String(spoken).slice(0,280));
+   utterance.lang='es-CO';utterance.rate=0.95;utterance.volume=0.95;
+   window.speechSynthesis.cancel();window.speechSynthesis.speak(utterance);
+  }catch{/* La interfaz de texto sigue disponible si falla la voz. */}
  }
  if(!route?.points?.length)return null;
  if(!fresh)return <div className="v54-route-hud stale" role="status">
@@ -76,6 +97,10 @@ export default function RouteGuideHud({me,route}){
     {voice?<Volume2 size={15}/>:<VolumeX size={15}/>}
     {voice?'Voz activada':'Escuchar indicaciones'}
    </button>
+   {voice&&<button type="button" className="v55-voice-toggle v55-repeat-toggle"
+     onClick={repeatInstruction} title="Repetir la indicación actual">
+     <Volume2 size={15}/> Repetir indicación
+   </button>}
   </div>
  </div>;
 }
