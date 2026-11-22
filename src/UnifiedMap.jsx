@@ -9,6 +9,7 @@ import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
 import {calculateWalkingRoute} from './routeService';
+import RouteGuideHud from './RouteGuideHud';
 const Map3D=lazy(()=>import('./Map3D').catch(()=>({default:function Unsupported3D({onUnsupported}){
  React.useEffect(()=>onUnsupported('No se pudo cargar la vista 3D. Continúa disponible el mapa 2D.'),[onUnsupported]);return null;
 }})));
@@ -233,6 +234,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {showTeammates&&activeSignals.filter(s=>s.latitude!==null&&s.longitude!==null)
       .map(s=><SignalMarker key={s.id} signal={s} alias={aliasFor(s.sender_id)}/>)}
    </MapContainer>}
+   <RouteGuideHud me={me} route={route}/>
    <NavigationControls me={me} destination={destination} onDestination={chooseDestination}
     objectives={objectives} picking={picking} setPicking={setPicking}
     mapStyle={mapStyle} setMapStyle={setMapStyle} follow={follow} setFollow={setFollow}
