@@ -116,7 +116,7 @@ Deno.serve(async (request) => {
       },
     }).setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setIssuer(apiKey)
-      .setSubject(user.id)
+      .setSubject(user.id + ':' + crypto.randomUUID())
       .setIssuedAt()
       .setNotBefore('-30s')
       .setExpirationTime('5m')
