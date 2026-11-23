@@ -18,7 +18,7 @@ export default function RadioLiveKit({user,teams,view='full',selectedTeamId,onTe
  const [speaker,setSpeaker]=useState('');
  // LiveKit detecta si el navegador permite reproducir audio remoto automáticamente.
  const [audioBlocked,setAudioBlocked]=useState(false);
- const roomRef=useRef(null),trackRef=useRef(null),audioRef=useRef(null),lockedRef=useRef(false),pressRef=useRef(false),generationRef=useRef(0);
+ const roomRef=useRef(null),trackRef=useRef(null),audioRef=useRef(null),lockedRef=useRef(false),pressRef=useRef(false),generationRef=useRef(0),fabGestureRef=useRef(null);
  const phaseRef=useRef('idle');
  const phaseSet=(v)=>{phaseRef.current=v;setPhase(v)};
 
@@ -40,7 +40,7 @@ export default function RadioLiveKit({user,teams,view='full',selectedTeamId,onTe
  },[micOff]);
  useEffect(()=>()=>{void exit()},[exit]);
  // Al salir de una vista suelta PTT, pero conserva la conexión y recepción.
- useEffect(()=>()=>micOff(),[view,micOff]);
+ useEffect(()=>()=>{if(fabGestureRef.current){clearTimeout(fabGestureRef.current.timer);fabGestureRef.current=null}micOff()},[view,micOff]);
  // Nunca seguir transmitiendo en un canal distinto del equipo elegido en el mapa.
  useEffect(()=>{
   if(activeTeamId && teamId && activeTeamId!==teamId && phaseRef.current!=='idle'){
@@ -174,24 +174,50 @@ export default function RadioLiveKit({user,teams,view='full',selectedTeamId,onTe
    <strong>{talking?'TRANSMITIENDO':compact?'MANTENER · HABLAR':'MANTENER PARA HABLAR'}</strong>
   </button>
  );
- const activeTeamName=teams.find(t=>t.id===(activeTeamId||teamId))?.name||'Equipo';
- const mapDock=<aside className="radio-map-dock" aria-label="Radio de equipo desde mapa GPS">
-  <div className="radio-map-dock-header">
-   <span className="radio-map-dock-name"><Radio size={15}/> {activeTeamName}</span>
-   <span className="radio-map-dock-status">{phase==='connected'?participants+' en radio':labels[phase]}</span>
-   <button type="button" className="radio-map-open" onClick={onOpenRadio} aria-label="Abrir módulo Radio PTT" title="Abrir radio"><ExternalLink size={16}/></button>
-  </div>
-  {phase==='idle'&&<button type="button" className="radio-map-connect" disabled={!teamId} onClick={join}>
-   <Radio size={17}/> {teamId?'Conectar radio':'Selecciona un equipo'}
-  </button>}
-  {phase==='joining'&&<p className="radio-map-hint">Conectando con el canal…</p>}
-  {phase==='connected'&&<div className="radio-map-actionbar">
-   {pttButton(true)}
-   <button type="button" className="radio-map-disconnect" onClick={()=>void exit()} aria-label="Desconectar radio"><PhoneOff size={17}/><span>Salir</span></button>
-  </div>}
-  {phase==='connected'&&audioBlocked&&<button className="radio-map-sound" type="button" onClick={startPlayback}><Volume2 size={16}/> Activar sonido</button>}
-  {phase==='error'&&<div className="radio-map-error"><p role="alert">{message||'Radio desconectada'}</p><button type="button" onClick={()=>void exit()}>Restablecer</button></div>}
- </aside>;
+ // Botón de acción rápida sobre el mapa. Toque corto: conectar o abrir radio.
+ // Pulsación sostenida (>= 280 ms) cuando está conectado: hablar hasta soltar.
+ // Pointer capture evita dejar el micrófono activo por deslizar fuera del botón.
+ const mapQuickTap=()=>{
+  if(phaseRef.current==='idle' && teamId)void join();
+  else if(phaseRef.current==='connected')onOpenRadio?.();
+  else if(phaseRef.current==='error')void exit();
+ };
+ const fabPointerDown=e=>{
+  if(e.pointerType==='mouse' && e.button!==0)return;
+  if(fabGestureRef.current)return;
+  e.preventDefault();
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch{}
+  const gesture={pointerId:e.pointerId,triggered:false,timer:null};
+  fabGestureRef.current=gesture;
+  gesture.timer=setTimeout(()=>{
+   if(fabGestureRef.current!==gesture)return;
+   if(phaseRef.current==='connected'){gesture.triggered=true;void hold()}
+  },280);
+ };
+ const fabEnd=(e,cancelled=false)=>{
+  const gesture=fabGestureRef.current;
+  if(!gesture||gesture.pointerId!==e.pointerId)return;
+  clearTimeout(gesture.timer);
+  fabGestureRef.current=null;
+  if(gesture.triggered)release();
+  else if(!cancelled)mapQuickTap();
+ };
+ const fabLabel=phase==='connected'
+  ?(talking?'Transmitiendo. Suelta para terminar.':'Radio conectada. Mantén pulsado para hablar; toque corto para abrir radio.')
+  :phase==='idle'?'Conectar radio del equipo seleccionado'
+  :phase==='joining'?'Conectando radio'
+  :'Restablecer radio después de un error';
+ const mapDock=<button type="button" className={'radio-map-fab '+(talking?'is-talking ':phase==='connected'?'is-connected ':phase==='joining'?'is-joining ':phase==='error'?'is-error ':'is-idle')}
+  disabled={phase==='joining'||(phase==='idle'&&!teamId)} aria-label={fabLabel} title={fabLabel}
+  onPointerDown={fabPointerDown}
+  onPointerUp={e=>fabEnd(e)}
+  onPointerCancel={e=>fabEnd(e,true)}
+  onLostPointerCapture={e=>fabEnd(e,true)}
+  onContextMenu={e=>e.preventDefault()}
+  onClick={e=>{if(e.detail===0)mapQuickTap()}}>
+  {phase==='connected'?(talking?<Mic size={26}/>:<MicOff size={26}/>):<Radio size={27}/>}
+  <span className="radio-map-fab-indicator" aria-hidden="true"/>
+ </button>;
  return <React.Fragment>
  <div ref={audioRef} className="radio-audio-sink" aria-label="Audio remoto de la radio"/>
  {view==='map'&&mapHost&&createPortal(mapDock,mapHost)}
