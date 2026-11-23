@@ -1,5 +1,5 @@
 // Edge Function: radio-token. NO pegar LIVEKIT_API_SECRET en el frontend ni GitHub.
-// Desplegar con verificación de JWT habilitada y guardar LIVEKIT_* en Secrets de Supabase.
+// Verifica el JWT explícitamente con Supabase Auth; deploy verify_jwt=false para claves publishable.
 import { createClient } from 'npm:@supabase/supabase-js@2.57.0';
 import { SignJWT } from 'npm:jose@6.1.0';
 
@@ -32,7 +32,13 @@ Deno.serve(async (request) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  let supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseKey) {
+    try {
+      const keys = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '{}');
+      supabaseKey = typeof keys.default === 'string' ? keys.default : null;
+    } catch { supabaseKey = null; }
+  }
   const url = Deno.env.get('LIVEKIT_URL');
   const apiKey = Deno.env.get('LIVEKIT_API_KEY');
   const secret = Deno.env.get('LIVEKIT_API_SECRET');
