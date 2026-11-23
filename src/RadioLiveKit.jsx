@@ -43,7 +43,11 @@ export default function RadioLiveKit({user,teams}){
   let room=null,track=null;
   try{
    const {data,error}=await supabase.functions.invoke('radio-token',{body:{teamId}});
-   if(error)throw new Error('No se pudo obtener autorización. Comprueba que la función radio-token esté desplegada.');
+   if(error){
+     let reason='No se pudo obtener autorización. Comprueba que la función radio-token esté desplegada.';
+     try{const details=await error.context?.json();if(typeof details?.error==='string')reason=details.error}catch{}
+     throw new Error(reason);
+   }
    if(!data?.url||!data?.token)throw new Error(data?.error||'El servidor no devolvió un token válido.');
    if(gen!==generationRef.current)return;
    room=new Room({adaptiveStream:true,dynacast:true});
