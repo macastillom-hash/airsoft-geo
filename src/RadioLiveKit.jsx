@@ -1,14 +1,16 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
 import {createLocalAudioTrack,Room,RoomEvent} from 'livekit-client';
-import {Radio,Mic,MicOff,Volume2,PhoneOff,AlertTriangle,Users} from 'lucide-react';
+import {Radio,Mic,MicOff,Volume2,PhoneOff,AlertTriangle,Users,ExternalLink} from 'lucide-react';
 import {supabase} from './supabase';
 import './radio-diagnostics.css';
 
 // Transporte de audio gestionado por LiveKit. La función radio-token comprueba membresía.
 // Micrófono PTT: la pista arranca silenciada y solo se activa al mantener pulsado.
 const labels={idle:'Fuera del canal',joining:'Conectando...',connected:'Conectado',error:'Error de conexión'};
-export default function RadioLiveKit({user,teams}){
- const [teamId,setTeamId]=useState('');
+export default function RadioLiveKit({user,teams,view='full',selectedTeamId,onTeamChange,mapHost,onOpenRadio}){
+ const teamId=selectedTeamId||teams[0]?.id||'';
+ const [activeTeamId,setActiveTeamId]=useState(null);
  const [phase,setPhase]=useState('idle');
  const [message,setMessage]=useState('');
  const [talking,setTalking]=useState(false);
@@ -19,7 +21,7 @@ export default function RadioLiveKit({user,teams}){
  const roomRef=useRef(null),trackRef=useRef(null),audioRef=useRef(null),lockedRef=useRef(false),pressRef=useRef(false),generationRef=useRef(0);
  const phaseRef=useRef('idle');
  const phaseSet=(v)=>{phaseRef.current=v;setPhase(v)};
- useEffect(()=>{if(!teamId&&teams.length)setTeamId(teams[0].id)},[teams,teamId]);
+
  const micOff=useCallback(()=>{
   pressRef.current=false;
   try{trackRef.current?.mute()}catch{}
@@ -34,13 +36,21 @@ export default function RadioLiveKit({user,teams}){
   if(track){try{await track.mute()}catch{}try{track.stop()}catch{}}
   if(room){try{await room.disconnect()}catch{}}
   if(audioRef.current)audioRef.current.replaceChildren();
-  setParticipants(0);setSpeaker('');setAudioBlocked(false);phaseSet('idle');
+  setParticipants(0);setSpeaker('');setAudioBlocked(false);setActiveTeamId(null);phaseSet('idle');
  },[micOff]);
  useEffect(()=>()=>{void exit()},[exit]);
+ // Al salir de una vista suelta PTT, pero conserva la conexión y recepción.
+ useEffect(()=>()=>micOff(),[view,micOff]);
+ // Nunca seguir transmitiendo en un canal distinto del equipo elegido en el mapa.
+ useEffect(()=>{
+  if(activeTeamId && teamId && activeTeamId!==teamId && phaseRef.current!=='idle'){
+   void exit();
+  }
+ },[activeTeamId,teamId,exit]);
 
  const join=async()=>{
   if(lockedRef.current||phaseRef.current!=='idle'||!teamId)return;
-  lockedRef.current=true;phaseSet('joining');setMessage('');setAudioBlocked(false);
+  lockedRef.current=true;phaseSet('joining');setMessage('');setAudioBlocked(false);setActiveTeamId(teamId);
   const gen=++generationRef.current;
   let room=null,track=null;
   try{
@@ -153,11 +163,43 @@ export default function RadioLiveKit({user,teams}){
   window.addEventListener('keydown',onDown);window.addEventListener('keyup',onUp);window.addEventListener('blur',onBlur);
   return()=>{window.removeEventListener('keydown',onDown);window.removeEventListener('keyup',onUp);window.removeEventListener('blur',onBlur)};
  },[hold]);
- return <section className="radio-test stack narrow">
+ const pttButton=(compact)=>(
+  <button type="button" disabled={phase!=='connected'}
+   className={'radio-ptt-btn '+(talking?'on ':'')+(compact?'radio-ptt-compact':'')}
+   aria-label={talking?'Transmitiendo voz':'Mantener pulsado para hablar'}
+   onPointerDown={e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.currentTarget.setPointerCapture?.(e.pointerId);void hold()}}
+   onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
+   onContextMenu={e=>e.preventDefault()}>
+   {talking?<Mic size={compact?21:32}/>:<MicOff size={compact?21:32}/>}
+   <strong>{talking?'TRANSMITIENDO':compact?'MANTENER · HABLAR':'MANTENER PARA HABLAR'}</strong>
+  </button>
+ );
+ const activeTeamName=teams.find(t=>t.id===(activeTeamId||teamId))?.name||'Equipo';
+ const mapDock=<aside className="radio-map-dock" aria-label="Radio de equipo desde mapa GPS">
+  <div className="radio-map-dock-header">
+   <span className="radio-map-dock-name"><Radio size={15}/> {activeTeamName}</span>
+   <span className="radio-map-dock-status">{phase==='connected'?participants+' en radio':labels[phase]}</span>
+   <button type="button" className="radio-map-open" onClick={onOpenRadio} aria-label="Abrir módulo Radio PTT" title="Abrir radio"><ExternalLink size={16}/></button>
+  </div>
+  {phase==='idle'&&<button type="button" className="radio-map-connect" disabled={!teamId} onClick={join}>
+   <Radio size={17}/> {teamId?'Conectar radio':'Selecciona un equipo'}
+  </button>}
+  {phase==='joining'&&<p className="radio-map-hint">Conectando con el canal…</p>}
+  {phase==='connected'&&<div className="radio-map-actionbar">
+   {pttButton(true)}
+   <button type="button" className="radio-map-disconnect" onClick={()=>void exit()} aria-label="Desconectar radio"><PhoneOff size={17}/><span>Salir</span></button>
+  </div>}
+  {phase==='connected'&&audioBlocked&&<button className="radio-map-sound" type="button" onClick={startPlayback}><Volume2 size={16}/> Activar sonido</button>}
+  {phase==='error'&&<div className="radio-map-error"><p role="alert">{message||'Radio desconectada'}</p><button type="button" onClick={()=>void exit()}>Restablecer</button></div>}
+ </aside>;
+ return <React.Fragment>
+ <div ref={audioRef} className="radio-audio-sink" aria-label="Audio remoto de la radio"/>
+ {view==='map'&&mapHost&&createPortal(mapDock,mapHost)}
+ {view==='full'&&<section className="radio-test stack narrow">
   <header><h2><Radio size={23}/> Radio PTT · LiveKit</h2>
    <p className="muted">Canal de voz del equipo con botón digital. Requiere LiveKit Free y la función segura radio-token de Supabase. Esta versión web no garantiza funcionar con pantalla bloqueada.</p></header>
   <div className="tile radio-test-panel">
-   <label>Equipo<select value={teamId} onChange={e=>setTeamId(e.target.value)} disabled={phase!=='idle'}>
+   <label>Equipo<select value={teamId} onChange={e=>onTeamChange?.(e.target.value)} disabled={phase!=='idle'}>
      <option value="">Selecciona equipo</option>{teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
    </select></label>
    <p><strong>Estado:</strong> {labels[phase]||phase} <Users size={16}/> {participants} conectado(s)</p>
@@ -168,17 +210,12 @@ export default function RadioLiveKit({user,teams}){
     {phase==='connected'&&audioBlocked&&<button className="btn outline" onClick={startPlayback}><Volume2 size={16}/> Activar sonido</button>}
    </div>
    {phase==='connected'&&<p className="small muted" role="status">{audioBlocked?'El navegador bloqueó la recepción de audio. Pulsa Activar sonido para escuchar.':'Recepción automática habilitada cuando el navegador permite reproducir audio.'}</p>}
-   <div ref={audioRef} aria-label="Audio remoto del equipo"/>
-   <button type="button" disabled={phase!=='connected'} className={'radio-ptt-btn '+(talking?'on':'')}
-    onPointerDown={e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.currentTarget.setPointerCapture?.(e.pointerId);void hold()}}
-    onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
-    onContextMenu={e=>e.preventDefault()}>
-    {talking?<Mic size={32}/>:<MicOff size={32}/>}
-    <strong>{talking?'TRANSMITIENDO':'MANTENER PARA HABLAR'}</strong>
-   </button>
+
+   {pttButton(false)}
    <p className="small muted">También puedes mantener pulsada la barra espaciadora o V. Se captura audio solo al entrar a la sala con tu permiso; el canal permanece silenciado hasta pulsar PTT.</p>
    <p className="small muted">Para botón físico de manos libres 3,5 mm y pantalla bloqueada falta el componente Android nativo.</p>
    {message&&<p role="alert" className="radio-error"><AlertTriangle size={16}/>{message}</p>}
   </div>
- </section>;
+ </section>}
+ </React.Fragment>;
 }
