@@ -105,7 +105,7 @@ function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,onTestVibra
  </div>;
 }
 export default function UnifiedMap({user,profile,team,teams,members,me,sharing,busy,onToggleSharing,
- onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection}){
+ onToggleDiscoverable,onTeamSwitch,onRadioDockRef,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection}){
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
@@ -302,6 +302,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {more&&<div className="v5-more-panel">
     {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>}
+   <div className="v5-radio-dock-host" ref={onRadioDockRef} aria-label="Acceso rápido a radio PTT"/>
    <button className="v5-recenter" type="button" disabled={!me} onClick={()=>setFocus(v=>v+1)}
     aria-label="Centrar mapa en mi ubicación" title="Centrar en mí"><Navigation size={18}/></button>
   </div>
