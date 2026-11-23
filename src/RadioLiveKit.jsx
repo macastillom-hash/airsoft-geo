@@ -14,6 +14,8 @@ export default function RadioLiveKit({user,teams}){
  const [talking,setTalking]=useState(false);
  const [participants,setParticipants]=useState(0);
  const [speaker,setSpeaker]=useState('');
+ // LiveKit detecta si el navegador permite reproducir audio remoto automáticamente.
+ const [audioBlocked,setAudioBlocked]=useState(false);
  const roomRef=useRef(null),trackRef=useRef(null),audioRef=useRef(null),lockedRef=useRef(false),pressRef=useRef(false),generationRef=useRef(0);
  const phaseRef=useRef('idle');
  const phaseSet=(v)=>{phaseRef.current=v;setPhase(v)};
@@ -32,13 +34,13 @@ export default function RadioLiveKit({user,teams}){
   if(track){try{await track.mute()}catch{}try{track.stop()}catch{}}
   if(room){try{await room.disconnect()}catch{}}
   if(audioRef.current)audioRef.current.replaceChildren();
-  setParticipants(0);setSpeaker('');phaseSet('idle');
+  setParticipants(0);setSpeaker('');setAudioBlocked(false);phaseSet('idle');
  },[micOff]);
  useEffect(()=>()=>{void exit()},[exit]);
 
  const join=async()=>{
   if(lockedRef.current||phaseRef.current!=='idle'||!teamId)return;
-  lockedRef.current=true;phaseSet('joining');setMessage('');
+  lockedRef.current=true;phaseSet('joining');setMessage('');setAudioBlocked(false);
   const gen=++generationRef.current;
   let room=null,track=null;
   try{
@@ -60,6 +62,13 @@ export default function RadioLiveKit({user,teams}){
     audioRef.current.appendChild(el);
    };
    const detach=(t)=>{for(const el of t.detach())el.remove()};
+   // track.attach() inicia audio automáticamente cuando el navegador lo permite.
+   // Si el navegador bloquea la reproducción, LiveKit emite este evento.
+   room.on(RoomEvent.AudioPlaybackStatusChanged,()=>{
+    if(roomRef.current===room&&gen===generationRef.current){
+     setAudioBlocked(!room.canPlaybackAudio);
+    }
+   });
    room.on(RoomEvent.ParticipantConnected,update);
    room.on(RoomEvent.ParticipantDisconnected,update);
    room.on(RoomEvent.TrackSubscribed,attach);
@@ -89,7 +98,7 @@ export default function RadioLiveKit({user,teams}){
      if(pub.track)attach(pub.track,p);
     }
    }
-   update();phaseSet('connected');
+   update();setAudioBlocked(!room.canPlaybackAudio);phaseSet('connected');
   }catch(e){
    // Limpiar la referencia ANTES de desconectar para no ocultar este error
    // con el evento Disconnected emitido por una salida programática.
@@ -101,7 +110,7 @@ export default function RadioLiveKit({user,teams}){
      name==='NotFoundError'?'No se encontró un micrófono disponible.':
      name==='NotReadableError'?'El micrófono está siendo utilizado o bloqueado por otra aplicación.':
      e?.message||'Error desconocido';
-    setMessage(detail);phaseSet('error');
+    setAudioBlocked(false);setMessage(detail);phaseSet('error');
    }
    if(track){try{track.stop()}catch{}}
    if(room){try{await room.disconnect()}catch{}}
@@ -118,8 +127,21 @@ export default function RadioLiveKit({user,teams}){
  },[micOff]);
  const release=()=>micOff();
  const startPlayback=async()=>{
-  try{await roomRef.current?.startAudio();setMessage('')}
-  catch{setMessage('El navegador bloquea el audio; activa el sonido del dispositivo.')}
+  const room=roomRef.current;
+  if(!room||phaseRef.current!=='connected')return;
+  try{
+   // Llamar directamente desde onClick: requerido por las políticas de autoplay.
+   await room.startAudio();
+   if(roomRef.current===room){
+    setAudioBlocked(!room.canPlaybackAudio);
+    if(room.canPlaybackAudio)setMessage('');
+   }
+  }catch{
+   if(roomRef.current===room){
+    setAudioBlocked(true);
+    setMessage('El navegador sigue bloqueando el sonido. Revisa el volumen, la salida de audio y los permisos del sitio.');
+   }
+  }
  };
  useEffect(()=>{
   const onDown=e=>{
@@ -143,8 +165,9 @@ export default function RadioLiveKit({user,teams}){
    <div className="inline-actions">
     <button className="btn primary" disabled={!teamId||phase!=='idle'} onClick={join}>Entrar a la radio</button>
     <button className="btn outline" disabled={phase==='idle'} onClick={()=>void exit()}><PhoneOff size={16}/> Salir</button>
-    <button className="btn outline" disabled={phase!=='connected'} onClick={startPlayback}><Volume2 size={16}/> Activar sonido</button>
+    {phase==='connected'&&audioBlocked&&<button className="btn outline" onClick={startPlayback}><Volume2 size={16}/> Activar sonido</button>}
    </div>
+   {phase==='connected'&&<p className="small muted" role="status">{audioBlocked?'El navegador bloqueó la recepción de audio. Pulsa Activar sonido para escuchar.':'Recepción automática habilitada cuando el navegador permite reproducir audio.'}</p>}
    <div ref={audioRef} aria-label="Audio remoto del equipo"/>
    <button type="button" disabled={phase!=='connected'} className={'radio-ptt-btn '+(talking?'on':'')}
     onPointerDown={e=>{if(e.pointerType==='mouse'&&e.button!==0)return;e.currentTarget.setPointerCapture?.(e.pointerId);void hold()}}
