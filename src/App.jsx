@@ -5,7 +5,6 @@ import {MapPin,Users,MessagesSquare,Shield,Radio,LogOut,Plus,Copy,Send,Upload,Na
 import {supabase,configured} from './supabase';
 import {distanceLabel,metersBetween,isValidLocation} from './geo';
 import VoiceRecorder from './VoiceRecorder';
-import RadioDiagnostics from './RadioDiagnostics';
 import RadioWebRTC from './RadioWebRTC';
 import DirectChat from './DirectChat';
 import TeamAdmin from './TeamAdmin';
