@@ -83,7 +83,7 @@ export default function RadioLiveKit({user,teams,view='full',selectedTeamId,onTe
    room.on(RoomEvent.ParticipantDisconnected,update);
    room.on(RoomEvent.TrackSubscribed,attach);
    room.on(RoomEvent.TrackUnsubscribed,detach);
-   room.on(RoomEvent.ActiveSpeakersChanged,speakers=>setSpeaker(speakers.filter(x=>x.identity!==user.id).map(x=>x.name||'Compañero').join(', ')));
+   room.on(RoomEvent.ActiveSpeakersChanged,speakers=>setSpeaker(speakers.filter(x=>x.identity!==room.localParticipant.identity).map(x=>x.name||'Compañero').join(', ')));
    room.on(RoomEvent.Disconnected,(reason)=>{
     // room.disconnect() también emite Disconnected: no reemplazar el error original
     // después de un fallo de micrófono, publicación o salida voluntaria.
