@@ -62,6 +62,47 @@ Deno.serve(async (request) => {
     if (memberError) return respond(503, { error: 'No se pudo verificar la membresía' });
     if (!member) return respond(403, { error: 'No perteneces a este equipo' });
 
+    // Diagnóstico temporal: verificar desde el servidor la pareja API Key/Secret
+    // sin exponer secretos, tokens de administración ni el listado de salas.
+    // El resultado de la solicitud se usa solo para distinguir credenciales
+    // rechazadas de errores del navegador o un token con permisos incorrectos.
+    if (secret !== secret.trim() || secret.length < 32 || /[\r\n]/.test(secret) ||
+        secret.startsWith('LIVEKIT_API_SECRET=') || secret.includes('•')) {
+      return respond(503, { error: 'La variable LIVEKIT_API_SECRET parece incompleta o incluye texto adicional. Vuelve a copiar solo el valor real desde LiveKit Cloud a Supabase Secrets.' });
+    }
+    if (apiKey !== apiKey.trim() || apiKey.includes('=') || apiKey.length < 12) {
+      return respond(503, { error: 'LIVEKIT_API_KEY no tiene el formato esperado. Vuelve a copiar la API Key del mismo proyecto LiveKit.' });
+    }
+    const cloud = new URL(url.replace(/^wss:/, 'https:'));
+    if (cloud.protocol !== 'https:' || !cloud.hostname.endsWith('.livekit.cloud')) {
+      return respond(503, { error: 'LIVEKIT_URL no corresponde a una dirección de proyecto LiveKit Cloud.' });
+    }
+    const controlToken = await new SignJWT({ video: { roomList: true } })
+      .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+      .setIssuer(apiKey).setIssuedAt().setNotBefore('-30s')
+      .setExpirationTime('2m')
+      .sign(new TextEncoder().encode(secret));
+    let controlResponse: Response;
+    try {
+      controlResponse = await fetch(cloud.origin + '/twirp/livekit.RoomService/ListRooms', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${controlToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+        signal: AbortSignal.timeout(6500),
+      });
+    } catch {
+      return respond(503, { error: 'No se pudo verificar la conexión segura entre Supabase y LiveKit. Reintenta más tarde.' });
+    }
+    if (controlResponse.status === 401 || controlResponse.status === 403) {
+      return respond(503, { error: 'LiveKit rechaza las credenciales del servidor. Comprueba que LIVEKIT_API_KEY y LIVEKIT_API_SECRET pertenezcan al proyecto indicado por LIVEKIT_URL y vuelve a guardarlas en Supabase.' });
+    }
+    if (!controlResponse.ok) {
+      return respond(503, { error: 'LiveKit no aceptó la prueba de conexión del servidor (HTTP ' + controlResponse.status + ').' });
+    }
+
     const room = `airsoft-team-${teamId}`;
     const token = await new SignJWT({
       name: 'Participante',
@@ -77,7 +118,7 @@ Deno.serve(async (request) => {
       .setIssuer(apiKey)
       .setSubject(user.id)
       .setIssuedAt()
-      .setNotBefore('0s')
+      .setNotBefore('-30s')
       .setExpirationTime('5m')
       .setJti(crypto.randomUUID())
       .sign(new TextEncoder().encode(secret));
