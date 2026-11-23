@@ -65,7 +65,15 @@ export default function RadioLiveKit({user,teams}){
    room.on(RoomEvent.TrackSubscribed,attach);
    room.on(RoomEvent.TrackUnsubscribed,detach);
    room.on(RoomEvent.ActiveSpeakersChanged,speakers=>setSpeaker(speakers.filter(x=>x.identity!==user.id).map(x=>x.name||'Compañero').join(', ')));
-   room.on(RoomEvent.Disconnected,()=>{micOff();setMessage('Se perdió la conexión de radio. Sal y vuelve a entrar.');phaseSet('error')});
+   room.on(RoomEvent.Disconnected,(reason)=>{
+    // room.disconnect() también emite Disconnected: no reemplazar el error original
+    // después de un fallo de micrófono, publicación o salida voluntaria.
+    if(roomRef.current!==room || gen!==generationRef.current)return;
+    micOff();
+    const detail=reason===undefined?'sin código disponible':String(reason);
+    setMessage('LiveKit desconectó la radio (motivo: '+detail+'). Pulsa Salir para restablecer el canal.');
+    phaseSet('error');
+   });
    await room.connect(data.url,data.token);
    if(gen!==generationRef.current){await room.disconnect();return}
    // Autoriza captura al ingresar. No transmite: la pista se publica silenciada.
@@ -83,7 +91,18 @@ export default function RadioLiveKit({user,teams}){
    }
    update();phaseSet('connected');
   }catch(e){
-   if(gen===generationRef.current){setMessage(e?.message||'Error desconocido');phaseSet('error')}
+   // Limpiar la referencia ANTES de desconectar para no ocultar este error
+   // con el evento Disconnected emitido por una salida programática.
+   if(room && roomRef.current===room)roomRef.current=null;
+   if(gen===generationRef.current){
+    micOff();
+    const name=String(e?.name||'');
+    const detail=name==='NotAllowedError'?'Permiso del micrófono denegado. Habilítalo en el navegador.':
+     name==='NotFoundError'?'No se encontró un micrófono disponible.':
+     name==='NotReadableError'?'El micrófono está siendo utilizado o bloqueado por otra aplicación.':
+     e?.message||'Error desconocido';
+    setMessage(detail);phaseSet('error');
+   }
    if(track){try{track.stop()}catch{}}
    if(room){try{await room.disconnect()}catch{}}
   }finally{lockedRef.current=false}
