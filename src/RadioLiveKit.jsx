@@ -1,7 +1,7 @@
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {createLocalAudioTrack,Room,RoomEvent} from 'livekit-client';
-import {Radio,Mic,MicOff,Volume2,PhoneOff,AlertTriangle,Users,ExternalLink} from 'lucide-react';
+import {Radio,Mic,MicOff,Volume2,PhoneOff,AlertTriangle,Users} from 'lucide-react';
 import {supabase} from './supabase';
 import './radio-diagnostics.css';
 
