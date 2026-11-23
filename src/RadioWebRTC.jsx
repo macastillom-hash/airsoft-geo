@@ -15,6 +15,8 @@ export default function RadioWebRTC({user,teams}){
  const [peerName,setPeerName]=useState('');
  const [transmitting,setTransmitting]=useState(false);
  const [headset,setHeadset]=useState('Sin evento detectado');
+ const [networkPath,setNetworkPath]=useState('Sin medir');
+ const [networkDelay,setNetworkDelay]=useState('—');
  const teamRef=useRef(''),channelRef=useRef(null),pcRef=useRef(null),streamRef=useRef(null),pressRef=useRef(false),remoteRef=useRef(null);
  const instanceRef=useRef(crypto.randomUUID()),pendingIceRef=useRef([]),peerRef=useRef(null),activeRef=useRef(false),connectingRef=useRef(false);
  const stateRef=useRef('idle');
@@ -25,6 +27,7 @@ export default function RadioWebRTC({user,teams}){
   track.enabled=on;pressRef.current=on;setTransmitting(on);
  },[]);
  const disconnect=useCallback(()=>{
+  setNetworkPath('Sin medir');setNetworkDelay('—');
   activeRef.current=false;setMic(false);pressRef.current=false;
   if(channelRef.current){const channel=channelRef.current;channelRef.current=null;supabase.removeChannel(channel)}
   pcRef.current?.close();pcRef.current=null;peerRef.current=null;pendingIceRef.current=[];
@@ -125,6 +128,26 @@ export default function RadioWebRTC({user,teams}){
   catch{return}
   return()=>{try{navigator.mediaSession.setActionHandler('play',null);navigator.mediaSession.setActionHandler('pause',null)}catch{}}
  },[]);
+ useEffect(()=>{
+  if(status!=='connected')return;
+  let cancelled=false;
+  const measure=async()=>{
+   const pc=pcRef.current;if(!pc||pc.connectionState!=='connected')return;
+   try{
+    const stats=await pc.getStats();let pair=null;const byId=new Map();
+    stats.forEach(x=>byId.set(x.id,x));
+    stats.forEach(x=>{if(x.type==='candidate-pair'&&(x.selected||x.nominated&&x.state==='succeeded'))pair=x});
+    if(!pair){const transport=[...byId.values()].find(x=>x.type==='transport'&&x.selectedCandidatePairId);if(transport)pair=byId.get(transport.selectedCandidatePairId)}
+    if(!pair||cancelled)return;
+    const local=byId.get(pair.localCandidateId),remote=byId.get(pair.remoteCandidateId);
+    const relayed=local?.candidateType==='relay'||remote?.candidateType==='relay';
+    setNetworkPath(relayed?'Retransmitida por TURN':local&&remote?'Directa (sin TURN)':'En evaluación');
+    if(Number.isFinite(pair.currentRoundTripTime))setNetworkDelay(Math.round(pair.currentRoundTripTime*1000)+' ms');
+   }catch{if(!cancelled)setNetworkPath('No disponible en este navegador')}
+  };
+  measure();const timer=setInterval(measure,5000);
+  return()=>{cancelled=true;clearInterval(timer)};
+ },[status]);
  const busy=status!=='idle';
  return <section className="stack narrow radio-test">
   <header><h2><Radio size={23}/> Radio PTT · prueba real WebRTC</h2>
@@ -148,6 +171,7 @@ export default function RadioWebRTC({user,teams}){
     {transmitting?<Mic size={32}/>:<MicOff size={32}/>}
     <strong>{transmitting?'TRANSMITIENDO':'MANTENER PARA HABLAR'}</strong>
    </button>
+   <p className="small muted">Ruta de conexión: <strong>{networkPath}</strong> · RTT de red: <strong>{networkDelay}</strong>. Esta medición ayuda a determinar si necesitas TURN, pero no mide la latencia completa de voz.</p>
    <p className="small muted">El micrófono permanece autorizado pero silenciado mientras estás en la sala. Se libera totalmente al salir. No se graban llamadas.</p>
    <p className="small muted">Manos libres 3,5 mm: {headset}. Para usar el botón físico como PTT y mantener audio con pantalla apagada hace falta la aplicación nativa Android.</p>
    {error&&<p role="alert" className="radio-error"><AlertTriangle size={16}/>{error}</p>}
