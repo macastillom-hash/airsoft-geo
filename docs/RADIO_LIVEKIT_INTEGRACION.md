@@ -5,12 +5,12 @@ Código React + función de token escrito y pendiente de pruebas reales. No se h
 
 ## Antes de probar
 1. **LiveKit**: mantener el proyecto en plan gratuito Build y verificar las cuotas del panel. No activar planes de pago.
-2. **Supabase**: abrir el proyecto que realmente utiliza Airsoft Geo, en **Edge Functions → Secrets**.
+2. **Supabase**: proyecto `lfkyznzwvgrsnmaukigi`, sección **Edge Functions → Secrets**.
 3. Crear estas variables, sin copiar valores secretos a GitHub, React ni al chat:
    - `LIVEKIT_URL`: dirección `wss://...` de LiveKit Cloud
    - `LIVEKIT_API_KEY`: API Key de LiveKit Cloud
    - `LIVEKIT_API_SECRET`: API Secret de LiveKit Cloud (privado)
-4. Desplegar la función **radio-token** incluida en `supabase/functions/radio-token/index.ts` mediante Supabase Edge Functions o CLI. Dejar activada la comprobación de JWT. La función valida `getUser` contra Supabase Auth y consulta `team_members` con RLS.
+4. **Despliegue realizado (23/11/2026)**. Función **radio-token** activa, versión 1, incluida en `supabase/functions/radio-token/index.ts` mediante Supabase Edge Functions o CLI. Desplegar con `verify_jwt=false` (para compatibilidad con claves publicables nuevas); **la función valida expresamente el Bearer JWT contra Supabase Auth** y `getUser` contra Supabase Auth y consulta `team_members` con RLS.
 5. **No ejecutar** `supabase/radio_ptt_v1.sql` para LiveKit: esas políticas son solo para el prototipo anterior basado en Supabase Realtime, no se requieren para LiveKit Cloud.
 6. Desplegar un preview HTTPS de la rama de GitHub `feature/radio-ptt-v1-diagnostics` (no sustituir main).
 7. En dos cuentas de Supabase diferentes del mismo equipo, abrir **Radio PTT**, elegir el mismo equipo y pulsar **Entrar a la radio**. Conceder micrófono y **Activar sonido** si el navegador lo exige.
