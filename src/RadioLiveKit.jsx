@@ -63,14 +63,14 @@ export default function RadioLiveKit({user,teams}){
    room.on(RoomEvent.ActiveSpeakersChanged,speakers=>setSpeaker(speakers.filter(x=>x.identity!==user.id).map(x=>x.name||'Compañero').join(', ')));
    room.on(RoomEvent.Disconnected,()=>{micOff();setMessage('Se perdió la conexión de radio. Sal y vuelve a entrar.');phaseSet('error')});
    await room.connect(data.url,data.token);
-   if(gen!==generationRef.current)return;
+   if(gen!==generationRef.current){await room.disconnect();return}
    // Autoriza captura al ingresar. No transmite: la pista se publica silenciada.
    track=await createLocalAudioTrack({echoCancellation:true,noiseSuppression:true,autoGainControl:true});
    if(gen!==generationRef.current){track.stop();return}
    await track.mute();
    trackRef.current=track;
    await room.localParticipant.publishTrack(track,{source:'microphone'});
-   if(gen!==generationRef.current)return;
+   if(gen!==generationRef.current){await room.disconnect();return}
    // Adjuntar audio ya publicado (si llegó antes del evento).
    for(const p of room.remoteParticipants.values()){
     for(const pub of p.audioTrackPublications.values()){
