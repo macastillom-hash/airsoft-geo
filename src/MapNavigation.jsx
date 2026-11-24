@@ -161,7 +161,7 @@ export default function NavigationControls({me,destination,onDestination,objecti
      onClick={()=>onShareDestination?.(shareName)}>
      <Share2 size={15}/> {sharingBusy?'Compartiendo…':'Compartir destino con mi equipo'}
     </button>
-    <small>Compartir este punto no activa el GPS de otras personas. Se elimina automáticamente tras 24 horas.</small>
+    <small>Compartir este punto no activa el GPS de otras personas. Deja de mostrarse después de 24 horas.</small>
    </div>}
   </div>}
   <details className="v59-shared-list">
