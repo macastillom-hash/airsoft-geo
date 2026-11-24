@@ -8,6 +8,7 @@ import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
+import useSharedDestinations from './useSharedDestinations';
 import {calculateWalkingRoute} from './routeService';
 import {routeGuidance} from './navigationGuide.js';
 import {reliableOffRouteFix,canRetryAutoRoute} from './reroutePolicy.js';
@@ -169,6 +170,29 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  function fallback3D(reason){setMapStyle('street');notify(reason||'Vista 3D no disponible; mapa 2D restaurado.','error')}
 
  const liveTeam=!!team,teamId=team?.id;
+ const {items:sharedDestinations,busy:destinationBusy,error:destinationError,
+  load:reloadSharedDestinations,publish:publishDestination,remove:removeDestination}=
+  useSharedDestinations(teamId,user.id,connection?.state!=='offline');
+ async function shareSelectedDestination(name){
+  if(!destination||!teamId)return;
+  if(connection?.state==='offline'){notify('Sin Internet: no se ha compartido ningún destino.','error');return}
+  try{
+   await publishDestination(name,destination.lat,destination.lng);
+   notify('Destino compartido con '+team.name+'. Cada compañero puede decidir si navegar hacia él.','success');
+  }catch(e){notify(e?.message||'No se pudo compartir el destino.','error')}
+ }
+ function chooseSharedDestination(d){
+  chooseDestination({id:d.id,name:d.name,lat:d.latitude,lng:d.longitude,shared:true});
+ }
+ function canRemoveDestination(d){
+  return d.creator_id===user.id||team?.owner_id===user.id||
+   members.some(m=>m.user_id===user.id&&m.administrative_role==='admin');
+ }
+ async function withdrawDestination(d){
+  if(!canRemoveDestination(d)||!window.confirm('¿Retirar el destino compartido "'+d.name+'"?'))return;
+  try{await removeDestination(d.id);notify('Destino retirado del mapa del equipo.','success')}
+  catch(e){notify(e?.message||'No se pudo retirar el destino.','error')}
+ }
  useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
   if(!teamId){setSignals([]);return;}
@@ -203,6 +227,8 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const showTeammates=layer==='team'||layer==='both',showNear=layer==='nearby'||layer==='both';
  const activeSignals=signals.filter(s=>new Date(s.expires_at).getTime()>tick);
  const aliasFor=id=>id===user.id?profile?.alias:members.find(m=>m.user_id===id)?.alias||'Compañero';
+ const activeSharedDestinations=sharedDestinations.filter(d=>new Date(d.expires_at).getTime()>tick)
+  .map(d=>({...d,creatorName:aliasFor(d.creator_id)}));
  const meProfile={alias:profile?.alias||'Tú',avatar_path:profile?.avatar_path,
   operationalRole:members.find(m=>m.user_id===user.id)?.operationalRole||'',
   adminRole:team?.owner_id===user.id?'owner':members.find(m=>m.user_id===user.id)?.administrative_role||'participant',
@@ -211,7 +237,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
   <div className="v52-map-topcontrols"><strong>Mapa GPS</strong><div className="v52-map-topactions">
    <button type="button" className={sharing?'v52-toggle on':'v52-toggle'} disabled={busy} onClick={onToggleSharing} title="Compartir GPS solo con tus equipos"><Navigation size={15}/>{sharing?'GPS compartido':'Compartir GPS'}</button>
    <button type="button" className={profile?.discoverable?'v52-toggle on':'v52-toggle'} onClick={onToggleDiscoverable} title="Permitir que otros usuarios registrados te encuentren de forma aproximada"><Radio size={15}/>{profile?.discoverable?'Visible en Cercanos':'Permitir que me encuentren'}</button>
-   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
+   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives();reloadSharedDestinations()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
    <button type="button" className="v52-map-refresh" onClick={toggleFullscreen} aria-label="Expandir mapa" title="Pantalla completa"><Maximize2 size={16}/></button>
   </div></div>
   <div className="v5-map-toolbar">
@@ -234,7 +260,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {mapStyle==='3d'?
     <Map3DBoundary onFailure={fallback3D}><Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
      <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
-      objectives={objectives} signals={activeSignals} destination={destination} route={route}
+      objectives={objectives} sharedDestinations={activeSharedDestinations} signals={activeSignals} destination={destination} route={route}
       showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
       onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
       onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
@@ -243,7 +269,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
      <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
     <FollowCurrent me={me} focus={focus} follow={follow}/>
-    <NavigationLayers objectives={objectives} destination={destination} route={route} onChoose={chooseDestination} me={me} picking={picking}
+    <NavigationLayers objectives={objectives} sharedDestinations={activeSharedDestinations} destination={destination} route={route} onChoose={chooseDestination} me={me} picking={picking}
      onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}/>
     {me&&<><Circle center={[me.lat,me.lng]} radius={Math.max(15,me.accuracy||20)}
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
@@ -271,6 +297,10 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
     routeError={routeError} onCalculateRoute={planRoute} onOpenCamera={openCamera} autoReroute={autoReroute}
     onToggleAutoReroute={setAutoReroute}
+    sharedDestinations={activeSharedDestinations} sharingBusy={destinationBusy} sharedDestinationsError={destinationError}
+    connectionOnline={connection?.state!=='offline'} onShareDestination={shareSelectedDestination}
+    onSelectShared={chooseSharedDestination} onRemoveShared={withdrawDestination}
+    canRemoveShared={canRemoveDestination}
     onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
    {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
     <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
