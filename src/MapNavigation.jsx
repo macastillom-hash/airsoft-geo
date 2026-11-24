@@ -2,7 +2,7 @@ import React,{useCallback,useEffect,useMemo,useState} from 'react';
 import {Marker,Popup,Circle,Polyline,useMapEvents} from 'react-leaflet';
 import L from 'leaflet';
 import {MapPinned,LocateFixed,Navigation,Route,Target,Flag,Copy,X,
-  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle,Camera} from 'lucide-react';
+  Compass,MousePointer2,RefreshCw,Satellite,Map as MapIcon, Box, Footprints, AlertCircle,Camera,Share2,Trash2} from 'lucide-react';
 import {supabase} from './supabase';
 import {metersBetween,distanceLabel} from './geo';
 import {validCoordinate,headingTo,bearingLabel} from './navigationUtils';
@@ -18,9 +18,10 @@ function DestinationClick({picking,onPick}){
  useMapEvents({click:e=>{if(picking)onPick(e.latlng.lat,e.latlng.lng)}});
  return null;
 }
-export function NavigationLayers({objectives,destination,onChoose,me,picking,onPick,route}){
+export function NavigationLayers({objectives,destination,onChoose,me,picking,onPick,route,sharedDestinations=[]}){
  const destIcon=useMemo(()=>markerIcon('selected'),[]);
  const zoneIcon=useMemo(()=>markerIcon('zone'),[]);
+ const sharedIcon=useMemo(()=>L.divIcon({className:'v59-shared-map-pin',html:'<span>◆</span>',iconSize:[35,35],iconAnchor:[17,17],popupAnchor:[0,-18]}),[]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
  const arrows=useMemo(()=>routeArrows(route?.points,85,28),[route?.points]);
  const point=destination&&validCoordinate(destination.lat,destination.lng)?[destination.lat,destination.lng]:null;
@@ -33,6 +34,16 @@ export function NavigationLayers({objectives,destination,onChoose,me,picking,onP
      <Target size={14}/> Elegir como destino</button>
    </div></Popup>
   </Marker>)}
+  {sharedDestinations.filter(d=>validCoordinate(d.latitude,d.longitude)).map(d=>
+   <Marker key={'shared-'+d.id} position={[d.latitude,d.longitude]} icon={sharedIcon}>
+    <Popup minWidth={190}>
+     <div className="v59-shared-popup"><strong>{d.name}</strong><small>Destino compartido del equipo</small>
+      <button type="button" className="v52-nav-button"
+       onClick={()=>onChoose({id:d.id,name:d.name,lat:d.latitude,lng:d.longitude,shared:true})}>
+       <Navigation size={14}/> Ir a este destino
+      </button></div>
+    </Popup>
+   </Marker>)}
   {point&&<><Marker position={point} icon={destIcon}>
    <Popup><strong>{destination.name}</strong><p className="v52-nav-hint">Destino seleccionado. Consulta el panel de orientación.</p></Popup>
   </Marker>
@@ -78,8 +89,11 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 }
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
- onCalculateRoute,onClearRoute,onOpenCamera,autoReroute,onToggleAutoReroute}){
+ onCalculateRoute,onClearRoute,onOpenCamera,autoReroute,onToggleAutoReroute,
+ sharedDestinations=[],sharingBusy=false,sharedDestinationsError='',onShareDestination,onSelectShared,onRemoveShared,canRemoveShared,connectionOnline=true}){
  const [expanded,setExpanded]=useState(false);
+ const [shareName,setShareName]=useState('');
+ useEffect(()=>setShareName(destination?.name==='Punto elegido en mapa'?'Punto de reunión':destination?.name||''),[destination?.id,destination?.name]);
  useEffect(()=>{if(destination?.id)setExpanded(true)},[destination?.id]);
  const fresh=me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000;
  const distance=fresh&&destination?metersBetween(me,destination):null;
@@ -138,7 +152,31 @@ export default function NavigationControls({me,destination,onDestination,objecti
     </button>
     {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>
+   {!destination.shared&&<div className="v59-share-destination">
+    <label htmlFor="v59-share-name"><span>Nombre del punto para tu equipo</span>
+     <input id="v59-share-name" type="text" maxLength={100} value={shareName}
+      placeholder="Ej.: Punto de reunión" onChange={e=>setShareName(e.target.value)}/>
+    </label>
+    <button type="button" disabled={sharingBusy||!connectionOnline||!shareName.trim()}
+     onClick={()=>onShareDestination?.(shareName)}>
+     <Share2 size={15}/> {sharingBusy?'Compartiendo…':'Compartir destino con mi equipo'}
+    </button>
+    <small>Compartir este punto no activa el GPS de otras personas. Se elimina automáticamente tras 24 horas.</small>
+   </div>}
   </div>}
+  <details className="v59-shared-list">
+   <summary><MapPinned size={15}/> Destinos compartidos del equipo ({sharedDestinations.length})</summary>
+   {sharedDestinationsError&&<p role="alert" className="v59-shared-error">{sharedDestinationsError}</p>}
+   {sharedDestinations.length===0?<p className="v52-nav-hint">Aún no hay destinos compartidos vigentes.</p>:
+    <ul>{sharedDestinations.map(d=><li key={d.id}>
+     <div><strong>{d.name}</strong><small>{d.creatorName||'Compañero'} · {new Date(d.created_at).toLocaleString('es-CO')}</small></div>
+     <button type="button" className="v59-go-shared"
+      title={'Seleccionar '+d.name} onClick={()=>onSelectShared?.(d)}><Navigation size={15}/> Ir</button>
+     {canRemoveShared?.(d)&&<button type="button" className="v59-remove-shared" disabled={sharingBusy||!connectionOnline}
+      title={'Retirar '+d.name} aria-label={'Retirar destino '+d.name}
+      onClick={()=>onRemoveShared?.(d)}><Trash2 size={15}/></button>}
+    </li>)}</ul>}
+  </details>
   {routeReady&&<label className="v55-reroute-toggle"><input type="checkbox" checked={!!autoReroute}
    onChange={e=>onToggleAutoReroute(e.target.checked)} aria-label="Recalcular automáticamente al desviarme"/>
    <span><strong>Recálculo automático (opcional)</strong><small>Si te desvías claramente y el GPS tiene buena precisión, consulta otra ruta a pie. Cada consulta envía tu posición y el destino a Valhalla/OpenStreetMap; máximo un intento cada 2 minutos.</small></span>
