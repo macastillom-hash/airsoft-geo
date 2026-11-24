@@ -227,8 +227,11 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const showTeammates=layer==='team'||layer==='both',showNear=layer==='nearby'||layer==='both';
  const activeSignals=signals.filter(s=>new Date(s.expires_at).getTime()>tick);
  const aliasFor=id=>id===user.id?profile?.alias:members.find(m=>m.user_id===id)?.alias||'Compañero';
- const activeSharedDestinations=sharedDestinations.filter(d=>new Date(d.expires_at).getTime()>tick)
-  .map(d=>({...d,creatorName:aliasFor(d.creator_id)}));
+ const activeSharedDestinations=useMemo(()=>sharedDestinations
+  .filter(d=>new Date(d.expires_at).getTime()>tick)
+  .map(d=>({...d,creatorName:d.creator_id===user.id?profile?.alias||'Tú':
+   members.find(m=>m.user_id===d.creator_id)?.alias||'Compañero'})),
+  [sharedDestinations,tick,members,profile?.alias,user.id]);
  const meProfile={alias:profile?.alias||'Tú',avatar_path:profile?.avatar_path,
   operationalRole:members.find(m=>m.user_id===user.id)?.operationalRole||'',
   adminRole:team?.owner_id===user.id?'owner':members.find(m=>m.user_id===user.id)?.administrative_role||'participant',
