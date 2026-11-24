@@ -31,3 +31,30 @@
 .v52-nav-view .v58-camera-shortcut{background:#d6f2e9;color:#11694f;border-color:#85cab1;min-width:32px}
 .v52-nav-view .v58-camera-shortcut:hover,.v52-nav-view .v58-camera-shortcut:focus-visible{background:#bef0dd;outline:2px solid #48ae8c}
 @media(max-width:690px){.v52-nav-view{flex-wrap:nowrap;gap:3px}.v52-nav-view .v58-camera-shortcut{padding:6px;min-width:28px}}
+
+/* Destinos compartidos: acciones explícitas sin alterar navegación personal. */
+.v59-shared-map-pin{height:35px;width:35px;border:3px solid #fff;background:#713cc8;color:#fff;border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 11px #33214a70;font-size:21px}
+.v59-shared-popup{display:flex;flex-direction:column;gap:7px}
+.v59-shared-popup strong{color:#533394}
+.v59-shared-popup small{color:#657b90;font-size:10px}
+.v59-share-destination{display:flex;flex-direction:column;gap:7px;padding:9px;border:1px solid #c8b5ef;background:#f6f1ff;border-radius:10px}
+.v59-share-destination label{display:flex;flex-direction:column;gap:5px;font-size:11px;font-weight:800;color:#573695}
+.v59-share-destination input{min-height:36px;width:100%;border:1px solid #b8c4df;border-radius:8px;padding:8px;color:#263a50;background:#fff;font-size:12px}
+.v59-share-destination button{border:1px solid #7442c7;border-radius:8px;background:#6635b9;color:#fff;padding:10px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:11px;font-weight:800}
+.v59-share-destination small{font-size:10px;color:#705990;line-height:1.35}
+.v59-share-destination button:disabled{opacity:.55;cursor:not-allowed}
+.v59-shared-list{margin-top:8px;padding:6px 8px;border:1px solid #d4c7ed;border-radius:10px;background:#f9f7ff}
+.v59-shared-list summary{display:flex;align-items:center;gap:6px;list-style:none;cursor:pointer;color:#573c8e;font-size:11px;font-weight:800;padding:6px 0}
+.v59-shared-list summary::after{content:'+';margin-left:auto;font-size:15px}
+.v59-shared-list[open] summary::after{content:'−'}
+.v59-shared-list summary::-webkit-details-marker{display:none}
+.v59-shared-list ul{list-style:none;padding:0;margin:5px 0 0;max-height:175px;overflow:auto}
+.v59-shared-list li{display:flex;align-items:center;gap:6px;padding:7px 2px;border-top:1px solid #e4dbf4}
+.v59-shared-list li>div{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.v59-shared-list li strong{font-size:11px;color:#2d4966;overflow-wrap:anywhere}
+.v59-shared-list li small{font-size:9px;color:#698099}
+.v59-shared-list li button{display:flex;align-items:center;justify-content:center;gap:4px;min-height:34px;border-radius:8px;border:1px solid #bcb4d3;background:#fff;color:#4c3479;font-weight:800;font-size:10px;padding:6px}
+.v59-shared-list li .v59-go-shared{background:#6c39bc;color:#fff;border-color:#6c39bc}
+.v59-shared-list li .v59-remove-shared{color:#9a374b}
+.v59-shared-error{font-size:11px;color:#a42c45;font-weight:750;margin:5px 0}
+@media(max-width:690px){.v59-share-destination{padding:7px}.v59-share-destination button{font-size:10px}.v59-shared-list{padding:5px}}
