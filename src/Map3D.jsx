@@ -9,7 +9,7 @@ import './map3d.css';
 const satelliteTiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 // Cartografía ligera incorporada localmente (ver light3DStyle.js).
 
-export default function Map3D({me,teammates,nearby,objectives,signals,destination,
+export default function Map3D({me,teammates,nearby,objectives,sharedDestinations=[],signals,destination,
  route,showTeammates,showNearby,follow,focus,picking,onPick,onChoose,onMember,onUnsupported}){
  const container=useRef(null),mapRef=useRef(null),pinsRef=useRef([]),arrowPinsRef=useRef([]);
  const controls=useRef({picking,onPick,onChoose,onMember,onUnsupported});
@@ -237,7 +237,7 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
    const element=document.createElement('button');
    element.type='button';element.className='v53-3d-pin '+kind;
    element.title=label;element.setAttribute('aria-label',label);
-   element.textContent=kind==='objective'?'◆':kind==='signal'?'!':kind==='mine'?'▲':label.slice(0,1).toUpperCase();
+   element.textContent=(kind==='objective'||kind==='shared')?'◆':kind==='signal'?'!':kind==='mine'?'▲':label.slice(0,1).toUpperCase();
    element.addEventListener('click',e=>{e.stopPropagation();click?.()});
    const rotation=kind==='mine'&&Number.isFinite(heading)?heading:0;
    const marker=new maplibregl.Marker({element,anchor:'center',rotation,
@@ -251,12 +251,14 @@ export default function Map3D({me,teammates,nearby,objectives,signals,destinatio
   if(showNearby)nearby.forEach(p=>add({lat:p.latitude,lng:p.longitude},
    p.alias||'Cercano','nearby',()=>controls.current.onMember?.({kind:'nearby',person:p})));
   objectives.forEach(z=>add(z,z.name||'Objetivo','objective',()=>controls.current.onChoose?.(z)));
+  sharedDestinations.forEach(d=>add({lat:d.latitude,lng:d.longitude},d.name||'Destino del equipo',
+   'shared',()=>controls.current.onChoose?.({id:d.id,name:d.name,lat:d.latitude,lng:d.longitude,shared:true})));
   if(destination&&validCoordinate(destination.lat,destination.lng))
    add(destination,destination.name||'Destino','destination',()=>{});
   if(showTeammates)signals.filter(s=>s.latitude!==null&&s.longitude!==null)
    .forEach(s=>add({lat:s.latitude,lng:s.longitude},'Aviso del equipo','signal',()=>{}));
  },[ready,me?.lat,me?.lng,me?.heading,teammates,nearby,objectives,signals,
-  destination,showTeammates,showNearby]);
+  destination,sharedDestinations,showTeammates,showNearby]);
  useEffect(()=>{
   const map=mapRef.current;
   if(map&&ready&&me&&Number.isFinite(me.observedAt)&&Date.now()-me.observedAt<=30000&&follow)

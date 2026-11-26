@@ -8,6 +8,7 @@ import {metersBetween,distanceLabel} from './geo';
 import {ProfileAvatar,useAvatarUrl} from './ProfileEditor';
 import {vibratePattern} from './notificationUtils';
 import NavigationControls,{NavigationLayers,useAuthorizedObjectives} from './MapNavigation';
+import useSharedDestinations from './useSharedDestinations';
 import {calculateWalkingRoute} from './routeService';
 import {routeGuidance} from './navigationGuide.js';
 import {reliableOffRouteFix,canRetryAutoRoute} from './reroutePolicy.js';
@@ -105,7 +106,7 @@ function PlayerCard({person,type,me,sharing,team,onSignal,onOpenChat,onTestVibra
  </div>;
 }
 export default function UnifiedMap({user,profile,team,teams,members,me,sharing,busy,onToggleSharing,
- onToggleDiscoverable,onTeamSwitch,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection}){
+ onToggleDiscoverable,onTeamSwitch,onRadioDockRef,onRefresh,onOpenChat,onNearbyVisibility,nearby,teammates,notify,connection,guest=false}){
  const [layer,setLayer]=useState('team'),[more,setMore]=useState(false),[sending,setSending]=useState(false);
  const [focus,setFocus]=useState(0),[signals,setSignals]=useState([]),[tick,setTick]=useState(Date.now());
  const [destination,setDestination]=useState(null),[picking,setPicking]=useState(false);
@@ -169,6 +170,30 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  function fallback3D(reason){setMapStyle('street');notify(reason||'Vista 3D no disponible; mapa 2D restaurado.','error')}
 
  const liveTeam=!!team,teamId=team?.id;
+ const {items:sharedDestinations,busy:destinationBusy,error:destinationError,
+  load:reloadSharedDestinations,publish:publishDestination,remove:removeDestination}=
+  useSharedDestinations(teamId,user.id,connection?.state!=='offline');
+ async function shareSelectedDestination(name){
+  if(guest){notify('Los invitados pueden consultar destinos, pero no publicarlos.','error');return}
+  if(!destination||!teamId)return;
+  if(connection?.state==='offline'){notify('Sin Internet: no se ha compartido ningún destino.','error');return}
+  try{
+   await publishDestination(name,destination.lat,destination.lng);
+   notify('Destino compartido con '+team.name+'. Cada compañero puede decidir si navegar hacia él.','success');
+  }catch(e){notify(e?.message||'No se pudo compartir el destino.','error')}
+ }
+ function chooseSharedDestination(d){
+  chooseDestination({id:d.id,name:d.name,lat:d.latitude,lng:d.longitude,shared:true});
+ }
+ function canRemoveDestination(d){
+  return !guest&&(d.creator_id===user.id||team?.owner_id===user.id||
+   members.some(m=>m.user_id===user.id&&m.administrative_role==='admin'));
+ }
+ async function withdrawDestination(d){
+  if(!canRemoveDestination(d)||!window.confirm('¿Retirar el destino compartido "'+d.name+'"?'))return;
+  try{await removeDestination(d.id);notify('Destino retirado del mapa del equipo.','success')}
+  catch(e){notify(e?.message||'No se pudo retirar el destino.','error')}
+ }
  useEffect(()=>{onNearbyVisibility(layer!=='team');return()=>onNearbyVisibility(false)},[layer,onNearbyVisibility]);
  const loadSignals=useCallback(async()=>{
   if(!teamId){setSignals([]);return;}
@@ -203,6 +228,11 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  const showTeammates=layer==='team'||layer==='both',showNear=layer==='nearby'||layer==='both';
  const activeSignals=signals.filter(s=>new Date(s.expires_at).getTime()>tick);
  const aliasFor=id=>id===user.id?profile?.alias:members.find(m=>m.user_id===id)?.alias||'Compañero';
+ const activeSharedDestinations=useMemo(()=>sharedDestinations
+  .filter(d=>new Date(d.expires_at).getTime()>tick)
+  .map(d=>({...d,creatorName:d.creator_id===user.id?profile?.alias||'Tú':
+   members.find(m=>m.user_id===d.creator_id)?.alias||'Compañero'})),
+  [sharedDestinations,tick,members,profile?.alias,user.id]);
  const meProfile={alias:profile?.alias||'Tú',avatar_path:profile?.avatar_path,
   operationalRole:members.find(m=>m.user_id===user.id)?.operationalRole||'',
   adminRole:team?.owner_id===user.id?'owner':members.find(m=>m.user_id===user.id)?.administrative_role||'participant',
@@ -210,17 +240,17 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
  return <div className="stack v5-map-panel">
   <div className="v52-map-topcontrols"><strong>Mapa GPS</strong><div className="v52-map-topactions">
    <button type="button" className={sharing?'v52-toggle on':'v52-toggle'} disabled={busy} onClick={onToggleSharing} title="Compartir GPS solo con tus equipos"><Navigation size={15}/>{sharing?'GPS compartido':'Compartir GPS'}</button>
-   <button type="button" className={profile?.discoverable?'v52-toggle on':'v52-toggle'} onClick={onToggleDiscoverable} title="Permitir que otros usuarios registrados te encuentren de forma aproximada"><Radio size={15}/>{profile?.discoverable?'Visible en Cercanos':'Permitir que me encuentren'}</button>
-   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
+   <button type="button" className={profile?.discoverable?'v52-toggle on':'v52-toggle'} onClick={onToggleDiscoverable} disabled={guest} title="Permitir que otros usuarios registrados te encuentren de forma aproximada"><Radio size={15}/>{profile?.discoverable?'Visible en Cercanos':'Permitir que me encuentren'}</button>
+   <button type="button" className="v52-map-refresh" onClick={()=>{onRefresh();reloadObjectives();reloadSharedDestinations()}} aria-label="Actualizar mapa" title="Actualizar mapa"><RefreshCw size={16}/></button>
    <button type="button" className="v52-map-refresh" onClick={toggleFullscreen} aria-label="Expandir mapa" title="Pantalla completa"><Maximize2 size={16}/></button>
   </div></div>
   <div className="v5-map-toolbar">
-   <div className="v5-map-layers" role="group" aria-label="Personas visibles en el mapa">
+   {!guest&&<div className="v5-map-layers" role="group" aria-label="Personas visibles en el mapa">
     {[['team','Mi equipo',Users],['nearby','Cercanos',Radio],['both','Ambos',MapPin]].map(([id,label,Icon])=>
      <button key={id} type="button" className={layer===id?'selected':''} onClick={()=>setLayer(id)}>
       <Icon size={16}/>{label}</button>)}
-   </div>
-   {teams.length>0&&<select className="select-team" value={teamId||''}
+   </div>}
+   {teams.length>0&&!guest&&<select className="select-team" value={teamId||''}
     aria-label="Equipo para los avisos y el mapa" onChange={e=>onTeamSwitch(e.target.value)}>
     {teams.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
    </select>}
@@ -234,7 +264,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {mapStyle==='3d'?
     <Map3DBoundary onFailure={fallback3D}><Suspense fallback={<div className="v53-3d-loading">Preparando mapa 3D…</div>}>
      <Map3D me={me} teammates={visibleTeammates} nearby={visibleNearby}
-      objectives={objectives} signals={activeSignals} destination={destination} route={route}
+      objectives={objectives} sharedDestinations={activeSharedDestinations} signals={activeSignals} destination={destination} route={route}
       showTeammates={showTeammates} showNearby={showNear} follow={follow} focus={focus} picking={picking}
       onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}
       onChoose={chooseDestination} onMember={setSelected3DPerson} onUnsupported={fallback3D}/>
@@ -243,7 +273,7 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     {mapStyle==='satellite'?<TileLayer key="satellite" attribution='Imagery &copy; Esri, Maxar, Earthstar Geographics' url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"/>:
      <TileLayer key="street" attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>}
     <FollowCurrent me={me} focus={focus} follow={follow}/>
-    <NavigationLayers objectives={objectives} destination={destination} route={route} onChoose={chooseDestination} me={me} picking={picking}
+    <NavigationLayers objectives={objectives} sharedDestinations={activeSharedDestinations} destination={destination} route={route} onChoose={chooseDestination} me={me} picking={picking}
      onPick={(lat,lng)=>{chooseDestination({id:'manual',name:'Punto elegido en mapa',lat,lng});setFollow(false)}}/>
     {me&&<><Circle center={[me.lat,me.lng]} radius={Math.max(15,me.accuracy||20)}
       pathOptions={{color:'#227ff3',fillOpacity:.06,weight:1}}/>
@@ -271,6 +301,10 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
     onRecenter={()=>setFocus(v=>v+1)} connection={connection} route={route} routeStatus={routeStatus}
     routeError={routeError} onCalculateRoute={planRoute} onOpenCamera={openCamera} autoReroute={autoReroute}
     onToggleAutoReroute={setAutoReroute}
+    sharedDestinations={activeSharedDestinations} sharingBusy={destinationBusy} sharedDestinationsError={destinationError} allowSharing={!guest}
+    connectionOnline={connection?.state!=='offline'} onShareDestination={shareSelectedDestination}
+    onSelectShared={chooseSharedDestination} onRemoveShared={withdrawDestination}
+    canRemoveShared={canRemoveDestination}
     onClearRoute={()=>{setRoute(null);setRouteStatus('idle');setRouteError('')}}/>
    {mapStyle==='3d'&&selected3DPerson&&<div className="v53-3d-player-panel">
     <button type="button" aria-label="Cerrar tarjeta GPS" onClick={()=>setSelected3DPerson(null)}>×</button>
@@ -283,25 +317,26 @@ export default function UnifiedMap({user,profile,team,teams,members,me,sharing,b
    {connection?.state==='offline'&&<div className="v52-map-offline"><WifiOff size={16}/> Sin conexión: avisos deshabilitados. Los puntos visibles pueden estar desactualizados.</div>}
    {fullscreen&&<div className="v52-fullscreen-privacy">
     <button type="button" onClick={onToggleSharing} disabled={busy}>{sharing?'Detener GPS':'Compartir GPS'}</button>
-    <button type="button" onClick={onToggleDiscoverable}>{profile?.discoverable?'Ocultar de Cercanos':'Permitir que me encuentren'}</button>
+    {!guest&&<button type="button" onClick={onToggleDiscoverable}>{profile?.discoverable?'Ocultar de Cercanos':'Permitir que me encuentren'}</button>}
     <button type="button" onClick={toggleFullscreen} aria-label="Salir de pantalla completa"><Minimize2 size={17}/></button>
    </div>}
    {cameraOpen&&destination&&<Suspense fallback={<div className="v56-camera-starting">Cargando modo cámara…</div>}>
     <CameraNavigation me={me} destination={destination} route={route} onClose={closeCamera}/>
    </Suspense>}
-   <div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
+   {!guest&&<div className="v5-map-rail" aria-label="Accesos rápidos del mapa">
     {quickSignals.filter(q=>q.group==='rival').map(q=><QuickButton key={q.id} type={q.id}
       send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
     <button className={'v5-quick v5-more-toggle '+(more?'open':'')} type="button"
       onClick={()=>setMore(o=>!o)} aria-expanded={more} title="Más acciones"><MoreHorizontal size={20}/><span>Más</span></button>
-   </div>
-   <div className="v5-map-rail-bottom" aria-label="Avisos de situación">
+   </div>}
+   {!guest&&<div className="v5-map-rail-bottom" aria-label="Avisos de situación">
     {['need_help','in_position'].map(id=><QuickButton key={id} type={id} send={sendSignal}
       disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
-   </div>
-   {more&&<div className="v5-more-panel">
+   </div>}
+   {!guest&&more&&<div className="v5-more-panel">
     {['medical','withdrawing','eliminated'].map(id=><QuickButton key={id} type={id} send={sendSignal} disabled={sending||!liveTeam||connection?.state==='offline'} compact/>)}
    </div>}
+   <div className="v5-radio-dock-host" ref={onRadioDockRef} aria-label="Acceso rápido a radio PTT"/>
    <button className="v5-recenter" type="button" disabled={!me} onClick={()=>setFocus(v=>v+1)}
     aria-label="Centrar mapa en mi ubicación" title="Centrar en mí"><Navigation size={18}/></button>
   </div>

@@ -1,0 +1,29 @@
+.radio-test-panel{display:flex;flex-direction:column;gap:14px}.radio-test-panel select{width:100%;margin-top:8px;min-height:40px}.radio-test-panel p{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.radio-ptt-btn{touch-action:none;user-select:none;-webkit-user-select:none;border:2px solid #3b82f6;border-radius:18px;background:#17335b;color:white;padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:10px;font:inherit;cursor:pointer;min-height:136px}.radio-ptt-btn.on{background:#176345;border-color:#22c55e}.radio-ptt-btn:focus-visible{outline:3px solid #93c5fd;outline-offset:3px}.radio-error{color:#b91c1c;font-weight:600}.radio-test h2{display:flex;align-items:center;gap:10px}
+
+
+/* Botón PTT flotante: 56 px, justo encima del control de centrar GPS. */
+.radio-audio-sink{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none}
+.v5-radio-dock-host{position:absolute;right:10px;bottom:100px;z-index:820;width:56px;height:56px;pointer-events:none}
+.v5-radio-dock-host:empty{display:none}
+.radio-map-fab{
+ pointer-events:auto;position:relative;display:flex;align-items:center;justify-content:center;
+ width:56px;height:56px;padding:0;margin:0;border-radius:50%;
+ border:2px solid #8bbdff;background:linear-gradient(145deg,#245c97,#10365d);
+ color:#fff;box-shadow:0 5px 15px #071d3d66,0 1px 3px #0002;
+ cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;
+ -webkit-tap-highlight-color:transparent;transition:background .16s ease,box-shadow .16s ease,transform .16s ease
+}
+.radio-map-fab svg{pointer-events:none;flex:none}
+.radio-map-fab.is-connected{border-color:#b7e2d1;background:linear-gradient(145deg,#1c745c,#124637)}
+.radio-map-fab.is-talking{border-color:#ffd6d9;background:linear-gradient(145deg,#d53c48,#901d2d);box-shadow:0 0 0 5px #e94a5038,0 5px 17px #33091266;transform:scale(1.035)}
+.radio-map-fab.is-joining{border-color:#d2e4fc;cursor:progress}
+.radio-map-fab.is-error{border-color:#ffc7ba;background:linear-gradient(145deg,#9a443f,#682824)}
+.radio-map-fab:focus-visible{outline:3px solid #a9ddff;outline-offset:3px}
+.radio-map-fab:disabled{opacity:.75;cursor:progress}
+.radio-map-fab-indicator{position:absolute;top:3px;right:3px;width:11px;height:11px;border-radius:50%;border:2px solid #f5fbff;background:#9eafbf;box-shadow:0 1px 3px #0004;pointer-events:none}
+.radio-map-fab.is-connected .radio-map-fab-indicator{background:#55e3a4}
+.radio-map-fab.is-talking .radio-map-fab-indicator{background:#ff565b}
+.radio-map-fab.is-joining .radio-map-fab-indicator{background:#ffca59;animation:radio-fab-pulse 1s ease-in-out infinite}
+.radio-map-fab.is-error .radio-map-fab-indicator{background:#fbb0a1}
+@keyframes radio-fab-pulse{50%{opacity:.4}}
+@media(prefers-reduced-motion:reduce){.radio-map-fab.is-joining .radio-map-fab-indicator{animation:none}.radio-map-fab{transition:none}}
