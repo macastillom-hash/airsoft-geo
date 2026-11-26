@@ -39,17 +39,26 @@ function Auth({notify,onGuestPending}){
   if(name.length<3||name.length>40||!/^[A-Z0-9]{10}$/.test(code)){
    notify('Introduce un alias de 3 a 40 caracteres y un código válido de 10 caracteres.','error');return;
   }
-  setLoading(true);onGuestPending?.({alias:name,code});
+  setLoading(true);
   try{
-   // Supabase crea una cuenta anónima autenticada, no una identidad pública sin permisos.
-   // GuestAccess solicita el cupo y la membresía ANTES de mostrar el Dashboard.
-   const {error}=await supabase.auth.signInAnonymously({options:{data:{alias:name}}});
+   // Consulta orientativa: el contador atómico en la base sigue siendo la autoridad.
+   const {data:remaining}=await supabase.rpc('guest_slots_remaining');
+   if(remaining===0)throw new Error('Hoy ya se utilizaron los 10 accesos de invitado. Intenta mañana.');
+   onGuestPending?.({alias:name,code});
+   // Al crear el usuario, el trigger valida equipo y reserva 1 de las 10 plazas.
+   // Un código inválido o una cuota agotada hace fallar el registro por completo.
+   const {error}=await supabase.auth.signInAnonymously({
+    options:{data:{alias:name,guest_team_code:code}}
+   });
    if(error)throw error;
   }catch(err){
    onGuestPending?.(null);
    const msg=sqlError(err);
    notify(/anonymous.*disabled|anonymous.*not.*enabled/i.test(msg)?
-     'El administrador debe habilitar Anonymous Sign-Ins en Supabase Auth para permitir invitados.':msg,'error');
+     'El administrador debe habilitar Anonymous Sign-Ins en Supabase Auth para permitir invitados.':
+     /LIMITE_10_INVITADOS|database error saving new user/i.test(msg)?
+      'No se pudo crear el acceso temporal. Comprueba el código del equipo y que aún queden cupos para hoy.':
+     msg,'error');
   }finally{setLoading(false)}
  }
  return <div className="auth-screen">
