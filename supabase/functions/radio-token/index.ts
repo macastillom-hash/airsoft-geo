@@ -55,7 +55,16 @@ Deno.serve(async (request) => {
     // Verificación remota de sesión real; nunca confiar en identidad enviada en JSON.
     const { data: userData, error: authError } = await client.auth.getUser(jwt);
     const user = userData?.user;
-    if (authError || !user?.id || user.is_anonymous) return respond(401, { error: 'Sesión inválida' });
+    if (authError || !user?.id) return respond(401, { error: 'Sesión inválida' });
+
+    // Los invitados solo pueden transmitir en su único equipo, durante las 24h autorizadas.
+    // Las credenciales anónimas por sí solas NO conceden acceso a LiveKit.
+    if (user.is_anonymous) {
+      const { data: guest, error: guestError } = await client.from('guest_sessions')
+        .select('team_id,expires_at').eq('user_id',user.id).eq('team_id',teamId)
+        .gt('expires_at',new Date().toISOString()).maybeSingle();
+      if (guestError || !guest) return respond(403, { error: 'Invitación temporal no válida o vencida' });
+    }
 
     const { data: member, error: memberError } = await client.from('team_members')
       .select('team_id').eq('team_id', teamId).eq('user_id', user.id).maybeSingle();
