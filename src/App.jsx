@@ -7,6 +7,7 @@ import {distanceLabel,metersBetween,isValidLocation} from './geo';
 import VoiceRecorder from './VoiceRecorder';
 import RadioLiveKit from './RadioLiveKit';
 import GuestAccess from './GuestAccess';
+import './guest-auth.css';
 import DirectChat from './DirectChat';
 import TeamAdmin from './TeamAdmin';
 import Activities from './Activities';
