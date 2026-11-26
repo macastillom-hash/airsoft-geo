@@ -90,7 +90,7 @@ export function useAuthorizedObjectives(teamId,reconnectedAt,online=true){
 export default function NavigationControls({me,destination,onDestination,objectives,picking,setPicking,
  mapStyle,setMapStyle,follow,setFollow,onRecenter,connection,route,routeStatus,routeError,
  onCalculateRoute,onClearRoute,onOpenCamera,autoReroute,onToggleAutoReroute,
- sharedDestinations=[],sharingBusy=false,sharedDestinationsError='',onShareDestination,onSelectShared,onRemoveShared,canRemoveShared,connectionOnline=true}){
+ sharedDestinations=[],sharingBusy=false,sharedDestinationsError='',onShareDestination,onSelectShared,onRemoveShared,canRemoveShared,connectionOnline=true,allowSharing=true}){
  const [expanded,setExpanded]=useState(false);
  const [shareName,setShareName]=useState('');
  useEffect(()=>setShareName(destination?.name==='Punto elegido en mapa'?'Punto de reunión':destination?.name||''),[destination?.id,destination?.name]);
@@ -152,7 +152,7 @@ export default function NavigationControls({me,destination,onDestination,objecti
     </button>
     {routeReady&&<button type="button" onClick={onClearRoute} title="Quitar ruta del mapa"><X size={15}/> Quitar ruta</button>}
    </div>
-   {!destination.shared&&<div className="v59-share-destination">
+   {allowSharing&&!destination.shared&&<div className="v59-share-destination">
     <label htmlFor="v59-share-name"><span>Nombre del punto para tu equipo</span>
      <input id="v59-share-name" type="text" maxLength={100} value={shareName}
       placeholder="Ej.: Punto de reunión" onChange={e=>setShareName(e.target.value)}/>
