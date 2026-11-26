@@ -1,0 +1,12 @@
+/* Acceso de invitados separado del registro permanente. */
+.guest-entry{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px 16px;background:#edf3fa}
+.guest-entry>.tile{width:min(100%,475px);padding:27px;display:flex;flex-direction:column;gap:13px}
+.guest-entry h2{display:flex;align-items:center;gap:9px;font-size:20px;margin:0}
+.guest-entry p{font-size:13px;margin:0}
+.guest-entry-form{display:flex;flex-direction:column;gap:13px}
+.guest-entry-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:800;color:#24415d}
+.guest-entry-form input{height:44px;border:1px solid #c9d9e6;border-radius:10px;padding:10px 13px;font-size:14px;background:#fff;color:#1c3549}
+.guest-entry .guest-error{color:#a41d3a;background:#fff1f2;border:1px solid #f2c3cf;padding:10px 12px;border-radius:9px;font-weight:650}
+.auth-box .btn.outline.full{margin-top:10px}
+.auth-box .linkbutton{padding:12px 0}
+@media(max-width:780px){.guest-entry>.tile{padding:20px}.guest-entry h2{font-size:18px}}
